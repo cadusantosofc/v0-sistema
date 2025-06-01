@@ -1,0 +1,6 @@
+{
+  "id": "2",
+  "name": "João Silva",
+  "type": "worker",
+  "balance": 500
+}

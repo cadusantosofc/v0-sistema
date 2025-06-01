@@ -1,0 +1,61 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  name      String
+  email     String   @unique
+  role      String   // "admin", "worker", "company"
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações
+  wallet    Wallet?
+  requests  WalletRequest[]
+}
+
+model Wallet {
+  id        String   @id @default(cuid())
+  balance   Float    @default(0)
+  userId    String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relações
+  user      User     @relation(fields: [userId], references: [id])
+  transactions Transaction[]
+}
+
+model WalletRequest {
+  id          String   @id @default(cuid())
+  type        String   // "withdrawal" or "recharge"
+  amount      Float
+  status      String   @default("pending") // "pending", "approved", "rejected"
+  pixKey      String?
+  receiptUrl  String?
+  description String
+  userId      String
+  createdAt   DateTime @default(now())
+  processedAt DateTime?
+
+  // Relações
+  user        User     @relation(fields: [userId], references: [id])
+}
+
+model Transaction {
+  id          String   @id @default(cuid())
+  type        String   // "credit" or "debit"
+  amount      Float
+  description String
+  walletId    String
+  createdAt   DateTime @default(now())
+
+  // Relações
+  wallet      Wallet   @relation(fields: [walletId], references: [id])
+}

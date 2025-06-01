@@ -1,0 +1,22 @@
+{
+  "transactions": [
+    {
+      "id": "1",
+      "userId": "1",
+      "type": "recharge",
+      "amount": 1000,
+      "status": "approved",
+      "createdAt": "2025-06-01T20:21:35.000Z",
+      "description": "Saldo inicial Tech Soluções"
+    },
+    {
+      "id": "2",
+      "userId": "2",
+      "type": "recharge",
+      "amount": 500,
+      "status": "approved",
+      "createdAt": "2025-06-01T20:21:35.000Z",
+      "description": "Saldo inicial João Silva"
+    }
+  ]
+}
