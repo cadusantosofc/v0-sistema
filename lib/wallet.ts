@@ -1,41 +1,64 @@
 import fs from "fs"
 import path from "path"
 
-// Função para pegar caminho do arquivo da carteira
-function getWalletPath(userId: string) {
-  return path.join(process.cwd(), "data", "wallets", `${userId}.txt`)
-}
+// Caminho do arquivo de carteiras
+const WALLETS_FILE = path.join(process.cwd(), "data", "wallets", "users.txt")
 
 // Garante que o diretório existe
-if (!fs.existsSync(path.dirname(getWalletPath("example")))) {
-  fs.mkdirSync(path.dirname(getWalletPath("example")), { recursive: true })
+if (!fs.existsSync(path.dirname(WALLETS_FILE))) {
+  fs.mkdirSync(path.dirname(WALLETS_FILE), { recursive: true })
+}
+
+// Garante que o arquivo existe
+if (!fs.existsSync(WALLETS_FILE)) {
+  fs.writeFileSync(WALLETS_FILE, "")
+}
+
+// Função para ler todas as carteiras
+function readWallets(): Map<string, number> {
+  try {
+    const content = fs.readFileSync(WALLETS_FILE, "utf-8")
+    const wallets = new Map<string, number>()
+    
+    if (!content) return wallets
+    
+    content.split("\n").forEach(line => {
+      if (!line) return
+      const [userId, balance] = line.split("|") 
+      wallets.set(userId, Number(balance))
+    })
+    
+    return wallets
+  } catch (error) {
+    console.error("Erro ao ler carteiras:", error)
+    return new Map()
+  }
+}
+
+// Função para salvar todas as carteiras
+function saveWallets(wallets: Map<string, number>): boolean {
+  try {
+    const content = Array.from(wallets.entries())
+      .map(([userId, balance]) => `${userId}|${balance}`)
+      .join("\n")
+    
+    fs.writeFileSync(WALLETS_FILE, content)
+    return true
+  } catch (error) {
+    console.error("Erro ao salvar carteiras:", error)
+    return false
+  }
 }
 
 // Função para ler o saldo atual
 export function getWallet(userId: string): number {
-  try {
-    const walletPath = getWalletPath(userId)
-    
-    // Se arquivo não existe, retorna 0
-    if (!fs.existsSync(walletPath)) {
-      return 0
-    }
-    
-    const content = fs.readFileSync(walletPath, "utf-8")
-    const wallet = JSON.parse(content)
-    
-    // Garante que retorna 0 se for negativo
-    return wallet.balance < 0 ? 0 : wallet.balance
-  } catch (error) {
-    console.error("Erro ao ler carteira:", error)
-    return 0
-  }
+  const wallets = readWallets()
+  return wallets.get(userId) || 0
 }
 
 // Função para atualizar saldo com lock de arquivo
 export function updateWallet(userId: string, newBalance: number): boolean {
-  const walletPath = getWalletPath(userId)
-  const lockFile = walletPath + ".lock"
+  const lockFile = WALLETS_FILE + ".lock"
   
   try {
     // Tenta obter lock
@@ -49,27 +72,14 @@ export function updateWallet(userId: string, newBalance: number): boolean {
     // Garante que o novo saldo não seja negativo
     newBalance = Math.max(0, newBalance)
 
-    // Se arquivo não existe, cria com saldo inicial
-    if (!fs.existsSync(walletPath)) {
-      const initialWallet = {
-        id: userId,
-        balance: newBalance
-      }
-      fs.writeFileSync(walletPath, JSON.stringify(initialWallet, null, 2))
-      return true
-    }
-
-    // Lê carteira atual
-    const content = fs.readFileSync(walletPath, "utf-8")
-    const wallet = JSON.parse(content)
-
-    // Atualiza o saldo
-    wallet.balance = newBalance
-
-    // Salva de volta no arquivo
-    fs.writeFileSync(walletPath, JSON.stringify(wallet, null, 2))
+    // Lê todas as carteiras
+    const wallets = readWallets()
     
-    return true
+    // Atualiza o saldo
+    wallets.set(userId, newBalance)
+
+    // Salva todas as carteiras
+    return saveWallets(wallets)
   } catch (error) {
     console.error("Erro ao atualizar carteira:", error)
     return false

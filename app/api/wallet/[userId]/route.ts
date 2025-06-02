@@ -1,38 +1,25 @@
-import { NextResponse } from 'next/server'
-import fs from 'fs/promises'
-import path from 'path'
-
-// Função auxiliar para pegar caminho do arquivo
-function getWalletPath(userId: string) {
-  return path.join(process.cwd(), 'data', 'wallets', `${userId}.txt`)
-}
+import { NextResponse } from 'next/server';
+import { getBalance, updateBalance } from '@/data/wallets';
 
 // GET /api/wallet/[userId]
 export async function GET(
   request: Request,
-  { params }: { params: { userId: string } }
+  context: { params: { userId: string } }
 ) {
-  try {
-    const userId = params.userId
-    const walletPath = getWalletPath(userId)
-    
-    // Verifica se arquivo existe
-    try {
-      await fs.access(walletPath)
-    } catch {
-      return NextResponse.json(
-        { error: `Carteira ${userId} não encontrada` },
-        { status: 404 }
-      )
-    }
-    
-    // Lê arquivo da carteira
-    const data = await fs.readFile(walletPath, 'utf-8')
-    const wallet = JSON.parse(data)
+  const { userId } = context.params
 
-    return NextResponse.json(wallet)
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'ID do usuário é obrigatório' },
+      { status: 400 }
+    )
+  }
+
+  try {
+    const balance = await getBalance(userId);
+    return NextResponse.json({ balance });
   } catch (error) {
-    console.error(`Erro ao ler carteira ${params.userId}:`, error)
+    console.error(`Erro ao ler carteira ${userId}:`, error)
     return NextResponse.json(
       { error: 'Erro ao carregar saldo' },
       { status: 500 }
@@ -43,45 +30,42 @@ export async function GET(
 // PATCH /api/wallet/[userId]
 export async function PATCH(
   request: Request,
-  { params }: { params: { userId: string } }
+  context: { params: { userId: string } }
 ) {
-  try {
-    const userId = params.userId
-    const { amount } = await request.json()
-    
-    const walletPath = getWalletPath(userId)
-    
-    // Verifica se arquivo existe
-    try {
-      await fs.access(walletPath)
-    } catch {
-      return NextResponse.json(
-        { error: `Carteira ${userId} não encontrada` },
-        { status: 404 }
-      )
-    }
-    
-    // Lê carteira atual
-    const data = await fs.readFile(walletPath, 'utf-8')
-    const wallet = JSON.parse(data)
+  const { userId } = context.params
 
-    // Atualiza saldo
-    const newBalance = wallet.balance + amount
-    if (newBalance < 0) {
+  if (!userId) {
+    return NextResponse.json(
+      { error: 'ID do usuário é obrigatório' },
+      { status: 400 }
+    )
+  }
+
+  try {
+    const { amount } = await request.json();
+    
+    // Não permite saldo negativo
+    const currentBalance = await getBalance(userId);
+    if (currentBalance + Number(amount) < 0) {
       return NextResponse.json(
         { error: 'Saldo não pode ficar negativo' },
         { status: 400 }
       )
     }
 
-    wallet.balance = newBalance
-
-    // Salva carteira
-    await fs.writeFile(walletPath, JSON.stringify(wallet, null, 2))
-
-    return NextResponse.json(wallet)
+    const success = await updateBalance(userId, Number(amount));
+    
+    if (success) {
+      const newBalance = await getBalance(userId);
+      return NextResponse.json({ balance: newBalance });
+    }
+    
+    return NextResponse.json(
+      { error: 'Erro ao atualizar saldo' },
+      { status: 500 }
+    );
   } catch (error) {
-    console.error(`Erro ao atualizar carteira ${params.userId}:`, error)
+    console.error(`Erro ao atualizar carteira ${userId}:`, error)
     return NextResponse.json(
       { error: 'Erro ao atualizar saldo' },
       { status: 500 }

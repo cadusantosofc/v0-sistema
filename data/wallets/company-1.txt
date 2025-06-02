@@ -1,6 +1,4 @@
 {
   "id": "company-1",
-  "name": "Tech Soluções",
-  "type": "company",
-  "balance": 2000
+  "balance": 1750
 }

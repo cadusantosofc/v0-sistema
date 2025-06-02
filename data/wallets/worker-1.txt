@@ -1,6 +1,1 @@
-{
-  "id": "worker-1",
-  "name": "João Silva",
-  "type": "worker",
-  "balance": 9500
-}
+500

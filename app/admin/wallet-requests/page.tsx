@@ -16,7 +16,7 @@ import { Eye } from "lucide-react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import Image from "next/image"
 import { cn } from "@/lib/utils"
-import { useWallet } from "@/hooks/useWallet"
+import { useWallet } from "@/hooks/use-wallet"
 
 type Request = {
   id: string
@@ -204,7 +204,7 @@ function RequestRow({
         <Badge
           variant={
             request.status === "approved"
-              ? "success"
+              ? "default"
               : request.status === "rejected"
               ? "destructive"
               : "secondary"

@@ -30,7 +30,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { Wallet } from "lucide-react"
-import { useWallet } from "@/hooks/useWallet"
+import { useWallet } from "@/hooks/use-wallet"
 
 const formSchema = z.object({
   userType: z.enum(["worker", "company"], {
@@ -83,7 +83,13 @@ export default function AdminFinancePage() {
   })
 
   // Hook para saldo em tempo real
-  const { balance, loading: loadingBalance } = useWallet(selectedUser || "")
+  const { balance, loading: loadingBalance, reloadBalance } = useWallet(selectedUser || "")
+
+  // Atualiza usuário selecionado quando muda o userId no form
+  useEffect(() => {
+    const userId = form.watch("userId")
+    setSelectedUser(userId)
+  }, [form.watch("userId")])
 
   // Carrega usuários
   useEffect(() => {
@@ -145,16 +151,8 @@ export default function AdminFinancePage() {
         throw new Error(responseData.error || "Erro ao processar operação")
       }
 
-      // Atualiza usuário na lista
-      setUsers(users.map(user => {
-        if (user.id === data.userId) {
-          return {
-            ...user,
-            wallet: responseData.wallet
-          }
-        }
-        return user
-      }))
+      // Força reload do saldo
+      await reloadBalance()
 
       toast({
         title: "Sucesso",
@@ -232,7 +230,12 @@ export default function AdminFinancePage() {
                       <SelectContent>
                         {filteredUsers.map(user => (
                           <SelectItem key={user.id} value={user.id}>
-                            {user.name} - Saldo: R$ {user.wallet?.balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) || "0,00"}
+                            {user.name}
+                            {selectedUser === user.id && !loadingBalance && (
+                              <span className="text-sm text-muted-foreground ml-2">
+                                Saldo atual: R$ {balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                              </span>
+                            )}
                           </SelectItem>
                         ))}
                       </SelectContent>

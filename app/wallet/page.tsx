@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useWallet } from "@/hooks/useWallet"
+import { useWallet } from "@/hooks/use-wallet"
 import { Balance } from "@/components/wallet/balance"
 import { WithdrawForm } from "@/components/wallet/withdraw-form"
 import { RechargeForm } from "@/components/wallet/recharge-form"
@@ -14,11 +14,7 @@ import {
   TableRow,
 } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
-import { USERS } from "@/constants/users"
-
-// IDs constantes
-const CURRENT_USER_ID = USERS.COMPANY.ID
-const CURRENT_USER_NAME = USERS.COMPANY.NAME
+import { useAuth } from "@/lib/auth-context"
 
 type Transaction = {
   id: string
@@ -30,15 +26,26 @@ type Transaction = {
 }
 
 export default function WalletPage() {
+  const { user } = useAuth()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
+
+  if (!user) {
+    return (
+      <div className="container py-6">
+        <div className="rounded-lg border p-4 text-center text-muted-foreground">
+          Você precisa estar logado para acessar sua carteira
+        </div>
+      </div>
+    )
+  }
 
   // Carrega transações
   useEffect(() => {
     const loadTransactions = async () => {
       try {
         setLoading(true)
-        const res = await fetch(`/api/wallet/transactions?userId=${CURRENT_USER_ID}`)
+        const res = await fetch(`/api/wallet/transactions?userId=${user.id}`)
         if (!res.ok) throw new Error("Erro ao carregar transações")
         const data = await res.json()
         setTransactions(data)
@@ -57,7 +64,7 @@ export default function WalletPage() {
       <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-bold">Financeiro</h1>
         <p className="text-muted-foreground">
-          {CURRENT_USER_NAME} - Gerencie seu saldo e transações
+          {user.name} - Gerencie seu saldo e transações
         </p>
       </div>
 
@@ -65,21 +72,21 @@ export default function WalletPage() {
       <div className="rounded-lg border p-6 bg-card">
         <div className="space-y-2">
           <p className="text-sm text-muted-foreground">Saldo Disponível</p>
-          <Balance userId={CURRENT_USER_ID} className="text-3xl font-bold text-green-500" />
+          <Balance userId={user.id} className="text-3xl font-bold text-green-500" />
         </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Formulário de Saque */}
         <WithdrawForm 
-          userId={CURRENT_USER_ID} 
-          userName={CURRENT_USER_NAME} 
+          userId={user.id} 
+          userName={user.name} 
         />
 
         {/* Formulário de Recarga */}
         <RechargeForm 
-          userId={CURRENT_USER_ID} 
-          userName={CURRENT_USER_NAME} 
+          userId={user.id} 
+          userName={user.name} 
         />
       </div>
 
@@ -138,7 +145,7 @@ export default function WalletPage() {
                     <Badge
                       variant={
                         transaction.status === "approved"
-                          ? "success"
+                          ? "default"
                           : transaction.status === "rejected"
                           ? "destructive"
                           : "secondary"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 
 interface Transaction {
   id: string
@@ -19,78 +19,96 @@ interface Wallet {
 }
 
 export function useWallet(userId: string) {
-  const [wallet, setWallet] = useState<Wallet | null>(null)
+  const [balance, setBalance] = useState(0)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [lastUpdated, setLastUpdated] = useState<string>("")  
 
-  const fetchWallet = async () => {
+  const fetchWallet = useCallback(async () => {
+    if (!userId) return
+
     try {
       setLoading(true)
       setError(null)
-      const response = await fetch(`/api/wallet?userId=${userId}`)
+
+      const response = await fetch(`/api/wallet/${userId}`, {
+        cache: 'no-store',
+        headers: {
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        }
+      })
       
-      if (!response.ok) {
-        throw new Error("Erro ao carregar carteira")
-      }
-      
+      if (!response.ok) throw new Error('Erro ao carregar carteira')
+
       const data = await response.json()
-      setWallet(data)
+      setBalance(Number(data.balance))
+      setLastUpdated(new Date().toLocaleTimeString())
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido")
-      console.error("Erro ao carregar carteira:", err)
+      console.error('Erro ao carregar carteira:', err)
+      setError(err instanceof Error ? err.message : 'Erro ao carregar carteira')
+    } finally {
+      setLoading(false)
+    }
+  }, [userId])
+
+  const updateBalance = async (amount: number): Promise<boolean> => {
+    if (!userId) return false
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      const response = await fetch(`/api/wallet/${userId}`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
+          'Pragma': 'no-cache'
+        },
+        body: JSON.stringify({ amount })
+      })
+
+      if (!response.ok) throw new Error('Erro ao atualizar saldo')
+
+      const data = await response.json()
+      setBalance(Number(data.balance))
+      setLastUpdated(new Date().toLocaleTimeString())
+      return true
+    } catch (err) {
+      console.error('Erro ao atualizar saldo:', err)
+      setError(err instanceof Error ? err.message : 'Erro ao atualizar saldo')
+      return false
     } finally {
       setLoading(false)
     }
   }
 
-  const addTransaction = async (
-    type: "credit" | "debit",
-    amount: number,
-    description: string,
-    jobId: string
-  ) => {
-    try {
-      setError(null)
-      const response = await fetch("/api/wallet", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          userId,
-          type,
-          amount,
-          description,
-          jobId,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Erro ao adicionar transação")
-      }
-
-      // Recarrega a carteira para obter o novo saldo e transações
-      await fetchWallet()
-      
-      return true
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Erro desconhecido")
-      console.error("Erro ao adicionar transação:", err)
-      return false
-    }
+  const hasEnoughBalance = async (amount: number): Promise<boolean> => {
+    await fetchWallet() // Recarrega saldo antes de verificar
+    return balance >= amount
   }
 
   useEffect(() => {
-    if (userId) {
+    // Busca inicial
+    fetchWallet()
+
+    // Polling a cada 10 segundos
+    const interval = setInterval(() => {
       fetchWallet()
-    }
-  }, [userId])
+    }, 10000)
+
+    // Limpa intervalo quando componente é desmontado
+    return () => clearInterval(interval)
+  }, [fetchWallet])
 
   return {
-    wallet,
+    balance,
     loading,
     error,
-    addTransaction,
-    refetch: fetchWallet,
+    lastUpdated,
+    updateBalance,
+    hasEnoughBalance,
+    reloadBalance: fetchWallet
   }
 }

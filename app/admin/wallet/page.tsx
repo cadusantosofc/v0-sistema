@@ -2,11 +2,13 @@
 
 import { useState } from "react"
 import { USERS } from "@/constants/users"
-import { Balance } from "@/components/wallet/balance"
+import { WalletDisplay } from "@/components/wallet-display"
+import { useWallet } from "@/hooks/use-wallet"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   Select,
   SelectContent,
@@ -16,43 +18,31 @@ import {
 } from "@/components/ui/select"
 
 export default function AdminWalletPage() {
-  const [loading, setLoading] = useState(false)
   const [selectedUser, setSelectedUser] = useState<string>("")
   const [operationType, setOperationType] = useState<"add" | "remove">("add")
   const [amount, setAmount] = useState("")
   const [description, setDescription] = useState("")
+  const [success, setSuccess] = useState("")
+  const [error, setError] = useState("")
+
+  const { updateBalance, loading } = useWallet(selectedUser)
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!selectedUser || !amount) return
 
-    setLoading(true)
-    try {
-      const res = await fetch("/api/admin/wallet", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userId: selectedUser,
-          amount: Number(amount),
-          type: operationType,
-          description
-        })
-      })
+    setSuccess("")
+    setError("")
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.message || "Erro ao atualizar saldo")
-      }
+    const value = operationType === "add" ? Number(amount) : -Number(amount)
+    const result = await updateBalance(value)
 
-      // Limpa form
+    if (result) {
+      setSuccess(`Saldo atualizado com sucesso!`)
       setAmount("")
       setDescription("")
-      alert("Saldo atualizado com sucesso!")
-    } catch (error) {
-      console.error("Erro:", error)
-      alert("Erro ao atualizar saldo")
-    } finally {
-      setLoading(false)
+    } else {
+      setError("Erro ao atualizar saldo")
     }
   }
 
@@ -91,7 +81,7 @@ export default function AdminWalletPage() {
         {selectedUser && (
           <div className="p-4 rounded-lg bg-muted">
             <p className="text-sm font-medium mb-1">Saldo Atual</p>
-            <Balance userId={selectedUser} />
+            <WalletDisplay userId={selectedUser} />
           </div>
         )}
 
@@ -134,6 +124,18 @@ export default function AdminWalletPage() {
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
+
+        {success && (
+          <Alert>
+            <AlertDescription>{success}</AlertDescription>
+          </Alert>
+        )}
+
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
         <Button type="submit" disabled={loading || !selectedUser || !amount}>
           {loading ? "Atualizando..." : "Atualizar Saldo"}

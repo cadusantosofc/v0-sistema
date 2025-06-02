@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { User, Building, Camera, Save, Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
+import { Balance } from "@/components/wallet/balance"
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth()
@@ -18,16 +19,38 @@ export default function ProfilePage() {
   const [isLoading, setIsLoading] = useState(false)
   const [success, setSuccess] = useState("")
   const [formData, setFormData] = useState({
-    name: user?.name || "",
-    email: user?.email || "",
-    phone: user?.phone || "",
-    bio: user?.bio || "",
-    category: user?.category || "",
-    document: user?.document || "",
+    name: "",
+    email: "",
+    phone: "",
+    bio: "",
+    category: "",
+    document: "",
+    avatar: "",
   })
 
+  // Atualiza formData quando user mudar
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        name: user.name || "",
+        email: user.email || "",
+        phone: user.phone || "",
+        bio: user.bio || "",
+        category: user.category || "",
+        document: user.document || "",
+        avatar: user.avatar || "",
+      })
+    }
+  }, [user])
+
   if (!user) {
-    return <div>Carregando...</div>
+    return (
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="rounded-lg border p-4 text-center text-muted-foreground">
+          Você precisa estar logado para acessar seu perfil
+        </div>
+      </div>
+    )
   }
 
   const handleSave = async () => {
@@ -35,7 +58,24 @@ export default function ProfilePage() {
     setSuccess("")
 
     try {
-      updateProfile(formData)
+      // Atualiza o perfil via API
+      const response = await fetch("/api/auth/me", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          ...formData
+        })
+      })
+
+      if (!response.ok) {
+        throw new Error("Erro ao atualizar perfil")
+      }
+
+      const { user: updatedUser } = await response.json()
+      updateProfile(updatedUser)
       setSuccess("Perfil atualizado com sucesso!")
       setIsEditing(false)
     } catch (error) {
@@ -53,6 +93,7 @@ export default function ProfilePage() {
       bio: user.bio || "",
       category: user.category || "",
       document: user.document || "",
+      avatar: user.avatar || "",
     })
     setIsEditing(false)
     setSuccess("")
@@ -78,7 +119,7 @@ export default function ProfilePage() {
             <div className="flex justify-center mb-4">
               <div className="relative">
                 <Avatar className="h-24 w-24">
-                  <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                  <AvatarImage src={formData.avatar || user.avatar || "/placeholder.svg"} alt={user.name} />
                   <AvatarFallback className="text-lg">
                     {user.name
                       .split(" ")
@@ -86,9 +127,38 @@ export default function ProfilePage() {
                       .join("")}
                   </AvatarFallback>
                 </Avatar>
-                <Button size="sm" variant="outline" className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full p-0">
-                  <Camera className="h-4 w-4" />
-                </Button>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  id="avatar-upload"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      const reader = new FileReader()
+                      reader.onloadend = () => {
+                        setFormData(prev => ({
+                          ...prev,
+                          avatar: reader.result as string
+                        }))
+                      }
+                      reader.readAsDataURL(file)
+                    }
+                  }}
+                />
+                <label htmlFor="avatar-upload">
+                  <Button 
+                    size="sm" 
+                    variant="outline" 
+                    className="absolute -bottom-2 -right-2 h-8 w-8 rounded-full p-0"
+                    type="button"
+                    asChild
+                  >
+                    <div>
+                      <Camera className="h-4 w-4" />
+                    </div>
+                  </Button>
+                </label>
               </div>
             </div>
             <CardTitle className="flex items-center justify-center gap-2">
@@ -100,11 +170,11 @@ export default function ProfilePage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">
-                R$ {user.wallet.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-              </div>
+            <div className="text-center space-y-1">
               <p className="text-sm text-gray-600">Saldo disponível</p>
+              <div className="flex justify-center">
+                <Balance userId={user.id} className="text-2xl font-bold text-green-600" />
+              </div>
             </div>
 
             {user.role === "worker" && (

@@ -1,0 +1,236 @@
+<?php 
+
+error_reporting(0);
+set_time_limit(0);
+
+date_default_timezone_set('America/Recife');
+$dt_atual = date("Y/m/d H:i:s");
+$timestamp_dt_atual = strtotime($dt_atual);
+
+$array_usuarios = file("botcon/usuarios.txt");
+$total_usuarios_registrados = count($array_usuarios);
+
+$array_grupos = file("botcon/grupos.txt");
+$total_grupos_registrados = count($array_grupos);
+
+$continuar = false;
+for($i=0;$i<count($array_usuarios);$i++){
+    $explode = explode("|" , $array_usuarios[$i]);
+     if($user_id == $explode[0]){
+         $creditos_list = $explode[1];
+         $continuar = true;
+     }
+}
+
+$continuar2 = false;
+for($i=0;$i<count($array_grupos);$i++){
+    $grupo_vip = explode("|" , $array_grupos[$i]);
+     if($chat_id == "-$grupo_vip[0]"){
+         $vencimento = $grupo_vip[1];
+         $continuar2 = true;
+     }
+}
+
+$timestamp_dt_expira = strtotime($vencimento);
+
+if(!$continuar && !$continuar2){
+    apiRequest("sendMessage", array('chat_id' => $chat_id, "parse_mode" => "Markdown", "text" => "*Você não tem permissão para utilizar esse comando! Para se tornar um usuário VIP e ter acesso as consultas e os checkers, entre em contato com o meu desenvolvedor e contrate um plano.
+
+Para mais informações ou para contratar, digite:* /planos", "reply_to_message_id" => $message_id)); 
+} else if($timestamp_dt_atual < $timestamp_dt_expira || $creditos_list > 0){
+
+function getStr($string, $start, $end) {
+	$str = explode($start, $string);
+	$str = explode($end, $str[1]);
+	return $str[0];
+}
+
+$l1 = substr($comando,0,1);
+$l2 = substr($comando,1,1);
+$l3 = substr($comando,2,1);
+
+$n1 = substr($comando,3,1);
+$n3 = substr($comando,5,1);
+$n4 = substr($comando,6,1);
+
+if(strlen($comando) == 7 && is_numeric($l1) == false && is_numeric($l2) == false && is_numeric($l3) == false && is_numeric($n1) == true && is_numeric($n3) == true && is_numeric($n4) == true) {
+
+
+$placa = $comando;
+
+
+$curl = curl_init();
+
+curl_setopt_array($curl, array(
+	CURLOPT_URL => "https://blackspacevpn.000webhostapp.com/pesquisas/FIOTI-BUSCAS/PlacaDetran.php?key=qsI1BYSEhvosY3Y&placa=$placa",
+	CURLOPT_RETURNTRANSFER => true,
+    CURLOPT_FOLLOWLOCATION => true,
+    CURLOPT_SSL_VERIFYHOST => false,
+    CURLOPT_SSL_VERIFYPEER => false,
+    CURLOPT_HTTP_VERSION => CURL_HTTP_VERSION_1_1,
+	CURLOPT_CUSTOMREQUEST => "GET"
+));
+
+$exe = curl_exec($curl);
+
+curl_close($curl);
+
+
+$placa = getStr($exe,'"placa": "','"');
+$chassi = getStr($exe,'"chassi": "','"');
+$renavam = getStr($exe,'"renavam": "','"');
+$categoria = getStr($exe,'"categoria": " ','"');
+$anoFabricacao = getStr($exe,'"ano": "','"');
+$anoModelo = getStr($exe,'"anoModelo": "','"');
+$modelo = getStr($exe,'"modelo": "','"');
+$modelo = str_replace("\/", "/", $modelo);
+$cor = getStr($exe,'"cor": "','"');
+$localEmplacamento = explode('-', getStr($exe,'"cidade": "','"'));
+$municipioEmplacamento = $localEmplacamento[0];
+$estadoEmplacamento = $localEmplacamento[1];
+$ipva = getStr($exe,'"ipva": "','"');
+$licenciamento = getStr($exe,'"licenciamento": "','"');
+$impedimento = getStr($exe,'"furto": "','"');
+$nome = getStr($exe,'"dono": "','"');
+$cpfCnpj = getStr($exe,'"cpf": "','"');
+$tipoPessoa = getStr($exe,'"pessoa": "','"');
+
+if(substr($cpfCnpj,12,1) == 0 && substr($cpfCnpj,13,1) == 0 && substr($cpfCnpj,14,1) == 0){
+    $cpfCnpj = substr($cpfCnpj,0,11);
+}
+
+If($nome){
+	              
+    if(!$chassi) {
+        $chassi = 'SEM INFORMAÇÃO';
+    }
+    if(!$renavam) {
+        $renavam = 'SEM INFORMAÇÃO';
+    }
+    if($categoria == 'PARTIC ') {
+        $categoria = 'PARTICULAR';
+    }
+    if(!$categoria) {
+        $categoria = 'SEM INFORMAÇÃO';
+    }
+    if(!$anoFabricacao) {
+        $anoFabricacao = 'SEM INFORMAÇÃO';
+    }
+    if(!$cor) {
+        $cor = 'SEM INFORMAÇÃO';
+    }
+    if(!$municipioEmplacamento) {
+        $municipioEmplacamento = 'SEM INFORMAÇÃO';
+    }
+    if(!$estadoEmplacamento) {
+        $estadoEmplacamento = 'SEM INFORMAÇÃO';
+    }
+    if(!$ipva) {
+        $ipva = 'SEM INFORMAÇÃO';
+    }
+    if(!$licenciamento) {
+        $licenciamento = 'SEM INFORMAÇÃO';
+    }
+    if(!$impedimento) {
+        $impedimento = 'SEM IMPEDIMENTO';
+    }
+    if($tipoPessoa == 'JUR\u00cdDICO') {
+        $tipoPessoa = 'JURÍDICO';
+    }
+
+apiRequest("sendMessage", array('chat_id' => $chat_id, "parse_mode" => "Markdown", "text" => "🔍 *CONSULTA  DE  PLACA* 🔍
+
+*• PLACA:* `".$placa."`
+
+*• CHASSI:* `".$chassi."`
+*• RENAVAM:* `".$renavam."`
+
+*• CATEGORIA:* `".$categoria."`
+
+*• ANO FABRICAÇÃO:* `".$anoFabricacao."`
+*• ANO MODELO:* `".$anoModelo."`
+
+*• MARCA MODELO:* `".$modelo."`
+
+*• COR PREDOMINANTE:* `".$cor."`
+
+*• MUNICÍPIO EMPLACAMENTO:* `".$municipioEmplacamento."`
+*• ESTADO EMPLACAMENTO:* `".$estadoEmplacamento."`
+
+*• IPVA PAGO:* `".$ipva."`
+*• ÚLTIMO LICENCIAMENTO:* `".$licenciamento."`
+*• IMPEDIMENTO:* `".$impedimento."`
+
+*• PROPRIETÁRIO:* `".$nome."`
+*• CPF/CNPJ:* `".$cpfCnpj."`
+*• TIPO PESSOA:* `".$tipoPessoa."`
+
+
+*• PARA SABER O VALOR DO SEU SALDO.*
+
+*• DIGITE:* /saldo
+
+🔛 *BOT:* @fiotibuscasbot
+
+🔛 *GRUPO OFICIAL:* @consultarcpfplus", "reply_to_message_id" => $message_id,
+'reply_markup' => array('inline_keyboard' => array(                                                                                                                                                                                                          
+                                                      //linha 1
+                                                     array(
+                                                         array('text'=>'🚮  Apagar  🚮',"callback_data"=>serialize(['id'=>$user_id, 'data'=>'apagar']))//botão com callback                                                   
+                                                      )
+                                                          
+                                            )
+                                    )));
+
+
+
+    if(!$continuar2 || $timestamp_dt_atual > $timestamp_dt_expira){
+	
+	$arquivo = file_get_contents('botcon/usuarios.txt');
+    $linhas = explode("\n", $arquivo);
+    $palavra = $user_id;
+    foreach($linhas as $linha => $valor) {
+        $posicao = preg_match("/\b$palavra\b/i", $valor);                      
+        if($posicao) {
+            $creditos_list = intval($creditos_list) - intval(1);
+            $linhas[$linha] = $user_id.'|'.$creditos_list;
+        }
+    }
+    $arquivo = implode("\n", $linhas);
+    file_put_contents('botcon/usuarios.txt', $arquivo);                    
+	
+    }
+
+}else{
+    
+    apiRequest("sendMessage", array('chat_id' => $chat_id, "parse_mode" => "Markdown", "text" => "*⚠️ PLACA NÃO ENCONTRADA!*", "reply_to_message_id" => $message_id,
+    'reply_markup' => array('inline_keyboard' => array(                                                                                                                                                    
+                                                      //linha 1
+                                                     array(
+                                                         array('text'=>'🚮  Apagar  🚮',"callback_data"=>serialize(['id'=>$user_id, 'data'=>'apagar']))                                                  
+                                                      )
+                                                          
+                                            )
+                                    )));
+
+}}else{       
+	
+      apiRequest("sendMessage", array('chat_id' => $chat_id, "parse_mode" => "Markdown", "text" => "*⚠️ PLACA INVÁLIDA!*", "reply_to_message_id" => $message_id,
+      'reply_markup' => array('inline_keyboard' => array(                                                                                                                                                    
+                                                      //linha 1
+                                                     array(
+                                                         array('text'=>'🚮  Apagar  🚮',"callback_data"=>serialize(['id'=>$user_id, 'data'=>'apagar']))                                                 
+                                                      )
+                                                          
+                                            )
+                                    ))); 
+       
+}} else {
+	
+	apiRequest("sendMessage", array('chat_id' => $chat_id, "text" => "Os seus créditos, acabaram! Por favor, entre em contato com o meu desenvolvedor e compre mais créditos para continuar utilizando as consultas.
+
+Desenvolvedor: @SRFioTi", "reply_to_message_id" => $message_id));
+
+}  
+
+?>

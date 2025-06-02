@@ -14,12 +14,12 @@ import { Badge } from "@/components/ui/badge"
 import { Plus, X, Loader2, DollarSign } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useJobs } from "@/lib/jobs-context"
-import { useTransactions } from "@/lib/transactions-context"
+import { useWallet } from "@/hooks/use-wallet"
 
 export default function PostJobPage() {
   const { user, updateWallet, getAllUsers } = useAuth()
   const { createJob } = useJobs()
-  const { holdJobPayment, calculateBalance, addTransaction } = useTransactions()
+  const { balance } = useWallet(user?.id || "")
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
@@ -46,7 +46,7 @@ export default function PostJobPage() {
   }
 
   const jobCost = 10 // Comissão do sistema: R$10
-  const currentBalance = calculateBalance(user.id, user.wallet)
+  const currentBalance = balance
 
   const addRequirement = () => {
     if (newRequirement.trim() && !formData.requirements.includes(newRequirement.trim())) {
@@ -103,37 +103,20 @@ export default function PostJobPage() {
       })
 
       if (jobId) {
-        // Hold the job payment (only salary, not commission)
-        holdJobPayment(jobId, user.id, salary, `Vaga: ${formData.title} - Garantia de Pagamento`)
-
-        // Pay commission directly to admin (find admin user)
-        const adminUsers = getAllUsers().filter((u) => u.role === "admin")
-        if (adminUsers.length > 0) {
-          const admin = adminUsers[0]
-
-          // Deduct commission from company
-          addTransaction({
-            userId: user.id,
-            type: "debit",
-            amount: -jobCost,
-            description: `Comissão do sistema - Vaga: ${formData.title}`,
-            status: "completed",
-            relatedUserId: admin.id,
+        // Deduzir valor total da carteira da empresa
+        const response = await fetch(`/api/wallet/${user.id}`, {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            amount: -totalCost,
+            description: `Vaga: ${formData.title} - Garantia de pagamento e comissão`
           })
+        })
 
-          // Add commission to admin
-          addTransaction({
-            userId: admin.id,
-            type: "credit",
-            amount: jobCost,
-            description: `Comissão recebida - Vaga: ${formData.title}`,
-            status: "completed",
-            relatedUserId: user.id,
-          })
-
-          // Update wallets
-          updateWallet(user.id, -totalCost) // Total cost from company
-          updateWallet(admin.id, jobCost) // Commission to admin
+        if (!response.ok) {
+          throw new Error("Erro ao processar pagamento")
         }
 
         setSuccess("Vaga publicada com sucesso! O valor foi retido como garantia.")

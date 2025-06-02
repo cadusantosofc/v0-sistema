@@ -93,8 +93,15 @@ export default function ProfilePage({ params }: { params: { id: string } }) {
           <div className="flex items-start justify-between">
             <div className="flex items-center space-x-4">
               <Avatar className="h-20 w-20">
-                <AvatarImage src={profile.avatar} alt={profile.name} />
-                <AvatarFallback>{profile.name[0]}</AvatarFallback>
+                {profile.avatar ? (
+                  <AvatarImage src={profile.avatar} alt={profile.name} />
+                ) : (
+                  <AvatarImage 
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(profile.name)}&background=random`} 
+                    alt={profile.name} 
+                  />
+                )}
+                <AvatarFallback>{profile.name[0].toUpperCase()}</AvatarFallback>
               </Avatar>
               <div>
                 <CardTitle className="text-2xl">{profile.name}</CardTitle>

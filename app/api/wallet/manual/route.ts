@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { processOperation, getWallet } from "@/lib/wallet"
+import { getBalance, updateBalance } from "@/data/wallets"
 
 export async function POST(request: Request) {
   try {
@@ -29,16 +29,32 @@ export async function POST(request: Request) {
       )
     }
 
-    // Processa operação
-    const result = processOperation(userId, type as "credit" | "debit", amount)
+    // Lê saldo atual
+    const currentBalance = await getBalance(userId)
 
-    if (!result.success) {
+    // Calcula valor da operação
+    const operationAmount = type === "credit" ? amount : -amount
+
+    // Valida saldo suficiente para débito
+    if (type === "debit" && currentBalance + operationAmount < 0) {
       return NextResponse.json(
-        { error: result.error },
+        { error: "Saldo insuficiente" },
         { status: 400 }
       )
     }
 
+    // Atualiza saldo
+    const success = await updateBalance(userId, operationAmount)
+
+    if (!success) {
+      return NextResponse.json(
+        { error: "Erro ao atualizar saldo" },
+        { status: 500 }
+      )
+    }
+
+    // Lê novo saldo
+    const newBalance = await getBalance(userId)
     return NextResponse.json({
       userId,
       wallet: {

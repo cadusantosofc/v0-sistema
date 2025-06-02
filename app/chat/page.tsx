@@ -4,82 +4,143 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { MessageSquare, Send, Mic, MicOff, Search, Clock, RotateCcw } from "lucide-react"
+import { MessageSquare, Send, Mic, Search } from "lucide-react"
+import { cn } from "@/lib/utils"
 import { useAuth } from "@/lib/auth-context"
-import { useTickets } from "@/lib/tickets-context"
 import { useNotifications } from "@/lib/notifications-context"
 import { useRealtime } from "@/lib/realtime-context"
 
+type Chat = {
+  id: string
+  jobId: string
+  companyId: string
+  workerId: string
+  companyName: string
+  workerName: string
+  jobTitle: string
+  status: "active" | "closed"
+  createdAt: string
+  updatedAt: string
+}
+
+type Message = {
+  id: string
+  chatId: string
+  senderId: string
+  senderName: string
+  senderRole: "admin" | "company" | "worker"
+  content: string
+  timestamp: string
+}
+
 export default function ChatPage() {
   const { user } = useAuth()
-  const { tickets, sendMessage, canSendMessage, reopenTicket, getTicketById } = useTickets()
   const { addNotification } = useNotifications()
   const { forceUpdate } = useRealtime()
   const searchParams = useSearchParams()
-  const [selectedTicketId, setSelectedTicketId] = useState<string>("")
+  const [selectedChatId, setSelectedChatId] = useState<string>("")
+  const [chats, setChats] = useState<Chat[]>([])
+  const [messages, setMessages] = useState<Message[]>([])
   const [newMessage, setNewMessage] = useState("")
   const [searchTerm, setSearchTerm] = useState("")
   const [isRecording, setIsRecording] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
-  // Get ticket from URL parameter
+  // Busca chats do usuário
   useEffect(() => {
-    const ticketId = searchParams.get("ticket")
-    if (ticketId) {
-      setSelectedTicketId(ticketId)
+    if (user?.id) {
+      fetch(`/api/chat?userId=${user.id}`)
+        .then(res => res.json())
+        .then(data => setChats(data.chats || []))
+        .catch(console.error)
+    }
+  }, [user?.id])
+
+  // Busca mensagens do chat selecionado
+  useEffect(() => {
+    if (selectedChatId) {
+      fetch(`/api/chat?chatId=${selectedChatId}`)
+        .then(res => res.json())
+        .then(data => {
+          setMessages(data.messages || [])
+          if (messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+          }
+        })
+        .catch(console.error)
+    }
+  }, [selectedChatId])
+
+  // Get chat from URL parameter
+  useEffect(() => {
+    const chatId = searchParams.get("chat")
+    if (chatId) {
+      setSelectedChatId(chatId)
     }
   }, [searchParams])
 
-  const userTickets = user
-    ? tickets.filter((t) => t.workerId === user.id || t.companyId === user.id || user.role === "admin")
-    : []
-
-  const filteredTickets = userTickets.filter(
-    (ticket) =>
-      ticket.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      ticket.workerName.toLowerCase().includes(searchTerm.toLowerCase()),
+  const filteredChats = chats.filter(
+    (chat) =>
+      chat.jobTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      chat.companyName.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      chat.workerName.toLowerCase().includes(searchTerm.toLowerCase()),
   )
 
-  const selectedTicket = getTicketById(selectedTicketId)
+  const selectedChat = chats.find(chat => chat.id === selectedChatId)
 
-  useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
-    }
-  }, [selectedTicket?.messages])
+  const handleSendMessage = async () => {
+    if (!newMessage.trim() || !selectedChatId || !user) return
 
-  const handleSendMessage = () => {
-    if (!newMessage.trim() || !selectedTicketId || !user || !canSendMessage(selectedTicketId)) return
-
-    const senderRole = user.role as "admin" | "company" | "worker"
-    sendMessage(selectedTicketId, user.id, user.name, senderRole, newMessage.trim())
-
-    // Notify other participants
-    if (selectedTicket) {
-      const otherParticipants = [selectedTicket.companyId, selectedTicket.workerId].filter((id) => id !== user.id)
-      otherParticipants.forEach((participantId) => {
-        addNotification({
-          userId: participantId,
-          type: "message",
-          title: "Nova Mensagem",
-          message: `${user.name}: ${newMessage.trim()}`,
-          read: false,
-          link: `/chat?ticket=${selectedTicketId}`,
-          data: { ticketId: selectedTicketId },
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: selectedChatId,
+          senderId: user.id,
+          senderName: user.name,
+          senderRole: user.role,
+          content: newMessage.trim()
         })
       })
-    }
 
-    setNewMessage("")
-    forceUpdate()
+      if (response.ok) {
+        // Atualiza lista de mensagens
+        const data = await response.json()
+        setMessages(prev => [...prev, data])
+
+        // Notifica outros participantes
+        const selectedChat = chats.find(chat => chat.id === selectedChatId)
+        if (selectedChat) {
+          const otherParticipantId = selectedChat.workerId === user.id ? selectedChat.companyId : selectedChat.workerId
+          addNotification({
+            userId: otherParticipantId,
+            type: "message",
+            title: "Nova Mensagem",
+            message: `${user.name}: ${newMessage.trim()}`,
+            read: false,
+            link: `/chat?chat=${selectedChatId}`,
+            data: { chatId: selectedChatId },
+          })
+        }
+
+        setNewMessage("")
+        forceUpdate()
+
+        // Rola para última mensagem
+        if (messagesEndRef.current) {
+          messagesEndRef.current.scrollIntoView({ behavior: "smooth" })
+        }
+      }
+    } catch (error) {
+      console.error('Erro ao enviar mensagem:', error)
+    }
   }
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -89,49 +150,69 @@ export default function ChatPage() {
     }
   }
 
-  const handleReopenTicket = () => {
-    if (!user || user.role !== "admin" || !selectedTicketId) return
+  const handleReopenChat = async () => {
+    if (!user || user.role !== "admin" || !selectedChatId) return
 
-    reopenTicket(selectedTicketId, user.id)
-
-    // Notify participants
-    if (selectedTicket) {
-      ;[selectedTicket.companyId, selectedTicket.workerId].forEach((participantId) => {
-        addNotification({
-          userId: participantId,
-          type: "system",
-          title: "Ticket Reaberto",
-          message: `O ticket "${selectedTicket.jobTitle}" foi reaberto pelo administrador`,
-          read: false,
-          link: `/chat?ticket=${selectedTicketId}`,
-          data: { ticketId: selectedTicketId },
+    try {
+      const response = await fetch('/api/chat', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          chatId: selectedChatId,
+          senderId: user.id,
+          senderName: user.name,
+          senderRole: user.role,
+          content: "Chat reaberto pelo administrador",
+          type: "system"
         })
       })
-    }
 
-    forceUpdate()
+      if (response.ok) {
+        // Atualiza lista de mensagens
+        const data = await response.json()
+        setMessages(prev => [...prev, data])
+
+        // Notifica participantes
+        const selectedChat = chats.find(chat => chat.id === selectedChatId)
+        if (selectedChat) {
+          [selectedChat.companyId, selectedChat.workerId].forEach((participantId) => {
+            addNotification({
+              userId: participantId,
+              type: "system",
+              title: "Chat Reaberto",
+              message: `O chat da vaga "${selectedChat.jobTitle}" foi reaberto pelo administrador`,
+              read: false,
+              link: `/chat?chat=${selectedChatId}`,
+              data: { chatId: selectedChatId },
+            })
+          })
+        }
+
+        forceUpdate()
+      }
+    } catch (error) {
+      console.error('Erro ao reabrir chat:', error)
+    }
   }
 
   const getStatusBadge = (status: string) => {
     switch (status) {
-      case "open":
-        return <Badge variant="default">Aberto</Badge>
-      case "completed":
-        return <Badge variant="secondary">Concluído</Badge>
-      case "reopened":
-        return <Badge variant="outline">Reaberto</Badge>
+      case "active":
+        return <Badge className="bg-green-100">Ativo</Badge>
+      case "closed":
+        return <Badge className="bg-red-100">Fechado</Badge>
       default:
-        return <Badge variant="secondary">{status}</Badge>
+        return null
     }
   }
 
-  const getOtherParticipant = (ticket: any) => {
-    if (!user) return { name: "", avatar: "" }
-
-    if (user.id === ticket.companyId) {
-      return { name: ticket.workerName, avatar: "/placeholder.svg" }
+  const getOtherParticipant = (chat: any) => {
+    if (user?.role === "company") {
+      return chat.workerName
+    } else if (user?.role === "worker") {
+      return chat.companyName
     } else {
-      return { name: ticket.companyName, avatar: "/placeholder.svg" }
+      return `${chat.companyName} - ${chat.workerName}`
     }
   }
 
@@ -148,212 +229,135 @@ export default function ChatPage() {
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">
       <div className="mb-8">
-        <h1 className="text-3xl font-bold">Sistema de Tickets</h1>
+        <h1 className="text-3xl font-bold">Sistema de Chat</h1>
         <p className="text-gray-600">Gerencie suas conversas e histórico de trabalhos</p>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6 h-[calc(100vh-200px)]">
-        {/* Tickets List */}
+        {/* Chat List */}
         <Card className="lg:col-span-1">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Tickets ({userTickets.length})
+              Chats ({chats.length})
             </CardTitle>
             <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar tickets..."
+                placeholder="Buscar chats..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-10"
               />
             </div>
           </CardHeader>
+
           <CardContent className="p-0">
             <ScrollArea className="h-[500px]">
-              {filteredTickets.length === 0 ? (
+              {filteredChats.length === 0 ? (
                 <div className="p-6 text-center text-gray-500">
                   <MessageSquare className="h-12 w-12 mx-auto mb-4 text-gray-300" />
-                  <p>Nenhum ticket encontrado</p>
+                  <h3 className="text-lg font-medium mb-2">Nenhum chat encontrado</h3>
+                  <p>Não encontramos nenhum chat com os critérios informados</p>
                 </div>
               ) : (
-                <div className="space-y-1">
-                  {filteredTickets.map((ticket) => {
-                    const otherParticipant = getOtherParticipant(ticket)
-                    const lastMessage = ticket.messages[ticket.messages.length - 1]
-
-                    return (
-                      <div
-                        key={ticket.id}
-                        className={`p-4 cursor-pointer hover:bg-gray-50 border-b transition-colors ${
-                          selectedTicketId === ticket.id ? "bg-blue-50 border-blue-200" : ""
-                        }`}
-                        onClick={() => setSelectedTicketId(ticket.id)}
-                      >
-                        <div className="flex items-center space-x-3">
-                          <Avatar>
-                            <AvatarImage src={otherParticipant.avatar || "/placeholder.svg"} />
-                            <AvatarFallback>
-                              {otherParticipant.name
-                                .split(" ")
-                                .map((n) => n[0])
-                                .join("") || "?"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between mb-1">
-                              <p className="font-medium truncate">{otherParticipant.name}</p>
-                              {getStatusBadge(ticket.status)}
-                            </div>
-                            <p className="text-sm font-medium text-blue-600 mb-1">{ticket.jobTitle}</p>
-                            <p className="text-xs text-gray-600 mb-1">
-                              {ticket.jobLocation} • R$ {ticket.jobValue.toLocaleString("pt-BR")}
-                            </p>
-                            <p className="text-sm text-gray-600 truncate">
-                              {lastMessage ? lastMessage.message : "Ticket criado"}
-                            </p>
-                            <p className="text-xs text-gray-400">
-                              {new Date(ticket.createdAt).toLocaleDateString("pt-BR")}
-                            </p>
-                          </div>
+                <div className="flex flex-col gap-2 p-4">
+                  {filteredChats.map((chat) => (
+                    <button
+                      key={chat.id}
+                      onClick={() => setSelectedChatId(chat.id)}
+                      className={cn(
+                        "flex flex-col items-start gap-2 rounded-lg border p-3 text-left text-sm transition-colors hover:bg-accent",
+                        selectedChatId === chat.id && "bg-accent",
+                      )}
+                    >
+                      <div className="flex w-full flex-col gap-1">
+                        <div className="flex items-center justify-between">
+                          <span className="font-medium">{chat.jobTitle}</span>
+                          {getStatusBadge(chat.status)}
                         </div>
+                        <span className="text-muted-foreground">{getOtherParticipant(chat)}</span>
                       </div>
-                    )
-                  })}
+                    </button>
+                  ))}
                 </div>
               )}
             </ScrollArea>
           </CardContent>
         </Card>
-
         {/* Chat Messages */}
         <Card className="lg:col-span-2">
-          {selectedTicket ? (
-            <>
-              <CardHeader className="border-b">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center space-x-3">
-                    <Avatar>
-                      <AvatarImage src={getOtherParticipant(selectedTicket).avatar || "/placeholder.svg"} />
-                      <AvatarFallback>
-                        {getOtherParticipant(selectedTicket)
-                          .name.split(" ")
-                          .map((n) => n[0])
-                          .join("") || "?"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div>
-                      <CardTitle className="text-lg">{getOtherParticipant(selectedTicket).name}</CardTitle>
-                      <CardDescription>{selectedTicket.jobTitle}</CardDescription>
-                      <div className="flex items-center gap-2 mt-1">
-                        {getStatusBadge(selectedTicket.status)}
-                        <span className="text-xs text-gray-500">
-                          R$ {selectedTicket.jobValue.toLocaleString("pt-BR")}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                  {user.role === "admin" && selectedTicket.status === "completed" && (
-                    <Button variant="outline" size="sm" onClick={handleReopenTicket}>
-                      <RotateCcw className="h-4 w-4 mr-2" />
+          {selectedChat ? (
+            <div className="flex flex-1 flex-col">
+              <div className="flex items-center justify-between border-b px-6 py-3">
+                <div className="flex flex-col">
+                  <h3 className="font-semibold">{selectedChat.jobTitle}</h3>
+                  <span className="text-sm text-muted-foreground">
+                    {getOtherParticipant(selectedChat)}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2">
+                  {getStatusBadge(selectedChat.status)}
+                  {user?.role === "admin" && selectedChat.status === "closed" && (
+                    <Button size="sm" onClick={handleReopenChat}>
                       Reabrir
                     </Button>
                   )}
                 </div>
-              </CardHeader>
+              </div>
 
-              <CardContent className="p-0">
-                <ScrollArea className="h-[400px] p-4">
-                  <div className="space-y-4">
-                    {selectedTicket.messages.map((message) => (
-                      <div
-                        key={message.id}
-                        className={`flex ${message.senderId === user?.id ? "justify-end" : "justify-start"}`}
-                      >
-                        <div
-                          className={`max-w-[70%] p-3 rounded-lg ${
-                            message.senderId === user?.id ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-900"
-                          }`}
-                        >
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-xs font-medium">{message.senderName}</p>
-                            {message.senderRole === "admin" && (
-                              <Badge variant="secondary" className="text-xs">
-                                Admin
-                              </Badge>
-                            )}
-                          </div>
-                          {message.type === "audio" ? (
-                            <div className="flex items-center gap-2">
-                              <Mic className="h-4 w-4" />
-                              <span className="text-sm">Mensagem de áudio</span>
-                            </div>
-                          ) : (
-                            <p>{message.message}</p>
-                          )}
-                          <p
-                            className={`text-xs mt-1 ${
-                              message.senderId === user?.id ? "text-blue-100" : "text-gray-500"
-                            }`}
-                          >
-                            {new Date(message.timestamp).toLocaleTimeString("pt-BR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                    <div ref={messagesEndRef} />
-                  </div>
-                </ScrollArea>
-
-                {/* Message Input */}
-                <div className="border-t p-4">
-                  {canSendMessage(selectedTicketId) ? (
-                    <div className="flex space-x-2">
-                      <Input
-                        placeholder="Digite sua mensagem..."
-                        value={newMessage}
-                        onChange={(e) => setNewMessage(e.target.value)}
-                        onKeyPress={handleKeyPress}
-                        className="flex-1"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setIsRecording(!isRecording)}
-                        className={isRecording ? "bg-red-100" : ""}
-                      >
-                        {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
-                      </Button>
-                      <Button onClick={handleSendMessage} disabled={!newMessage.trim()}>
-                        <Send className="h-4 w-4" />
-                      </Button>
+              <ScrollArea className="flex-1 p-4">
+                <div className="flex flex-col gap-4">
+                  {messages.map((message) => (
+                    <div
+                      key={message.id}
+                      className={cn(
+                        "flex w-max max-w-[80%] flex-col gap-2 rounded-lg px-3 py-2 text-sm",
+                        message.senderId === user?.id
+                          ? "ml-auto bg-primary text-primary-foreground"
+                          : "bg-muted",
+                      )}
+                    >
+                      <span className="font-medium">{message.senderName}</span>
+                      <span>{message.content}</span>
                     </div>
-                  ) : (
-                    <div className="text-center py-4">
-                      <div className="flex items-center justify-center gap-2 text-gray-500">
-                        <Clock className="h-5 w-5" />
-                        <span>Este ticket está {selectedTicket.status === "completed" ? "concluído" : "fechado"}</span>
-                      </div>
-                      <p className="text-sm text-gray-400 mt-1">
-                        {selectedTicket.status === "completed"
-                          ? "O chat foi bloqueado automaticamente após a conclusão do trabalho"
-                          : "Não é possível enviar mensagens neste ticket"}
-                      </p>
-                    </div>
-                  )}
+                  ))}
+                  <div ref={messagesEndRef} />
                 </div>
-              </CardContent>
-            </>
+              </ScrollArea>
+
+              <div className="flex items-center gap-2 border-t p-4">
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  className={cn(isRecording && "text-destructive")}
+                  onClick={() => setIsRecording(!isRecording)}
+                  disabled={!selectedChatId || selectedChat?.status === "closed"}
+                >
+                  <Mic className="h-4 w-4" />
+                </Button>
+                <Input
+                  placeholder="Digite sua mensagem..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
+                  disabled={!selectedChatId || selectedChat?.status === "closed"}
+                />
+                <Button
+                  size="icon"
+                  onClick={handleSendMessage}
+                  disabled={!selectedChatId || selectedChat?.status === "closed"}
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
           ) : (
             <CardContent className="flex items-center justify-center h-full">
               <div className="text-center text-gray-500">
                 <MessageSquare className="h-16 w-16 mx-auto mb-4 text-gray-300" />
-                <h3 className="text-lg font-medium mb-2">Selecione um ticket</h3>
-                <p>Escolha um ticket da lista para visualizar a conversa</p>
+                <h3 className="text-lg font-medium mb-2">Selecione um chat</h3>
+                <p>Escolha um chat da lista para visualizar a conversa</p>
               </div>
             </CardContent>
           )}

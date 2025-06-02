@@ -35,6 +35,7 @@ import {
 } from "lucide-react"
 import { format } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { Balance } from "@/components/wallet/balance"
 
 interface Company {
   id: string
@@ -43,7 +44,8 @@ interface Company {
   phone: string
   website: string
   location: string
-  logo: string
+  logo?: string
+  avatar?: string
   status: "active" | "banned"
   totalJobs: number
   totalHires: number
@@ -154,10 +156,12 @@ export default function CompaniesPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Empresa</TableHead>
+                  <TableHead>ID</TableHead>
                   <TableHead>Localização</TableHead>
                   <TableHead>Vagas/Contratações</TableHead>
                   <TableHead>Avaliação</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Saldo</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
               </TableHeader>
@@ -167,13 +171,25 @@ export default function CompaniesPage() {
                     <TableCell>
                       <div className="flex items-center space-x-4">
                         <Avatar>
-                          <AvatarImage src={company.logo} alt={company.name} />
-                          <AvatarFallback>{company.name[0]}</AvatarFallback>
+                          <AvatarImage src={company.avatar || company.logo || "/placeholder.svg"} />
+                          <AvatarFallback>
+                            {company.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")}
+                          </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium">{company.name}</p>
-                          <p className="text-sm text-muted-foreground">{company.email}</p>
+                          <div className="font-medium">{company.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {company.email}
+                          </div>
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-muted-foreground">
+                        {company.id}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -204,6 +220,9 @@ export default function CompaniesPage() {
                       <Badge className={`${statusMap[company.status].color} text-white`}>
                         {statusMap[company.status].label}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Balance userId={company.id} />
                     </TableCell>
                     <TableCell className="text-right">
                       <DropdownMenu>

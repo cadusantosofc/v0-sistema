@@ -32,6 +32,7 @@ import {
 } from "lucide-react"
 import { formatDistanceToNow } from "date-fns"
 import { ptBR } from "date-fns/locale"
+import { Balance } from "@/components/wallet/balance"
 
 interface SystemUser {
   id: string
@@ -170,8 +171,10 @@ export default function UsersPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Usuário</TableHead>
+                  <TableHead>ID</TableHead>
                   <TableHead>Cargo</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Saldo</TableHead>
                   <TableHead>Criado em</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
@@ -182,13 +185,25 @@ export default function UsersPage() {
                     <TableCell>
                       <div className="flex items-center space-x-4">
                         <Avatar>
-                          <AvatarImage src={user.avatar} alt={user.name} />
-                          <AvatarFallback>{user.name[0]}</AvatarFallback>
+                          <AvatarImage src={user.avatar || "/placeholder.svg"} />
+                          <AvatarFallback>
+                            {user.name
+                              .split(" ")
+                              .map((n) => n[0])
+                              .join("")}
+                          </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium">{user.name}</p>
-                          <p className="text-sm text-muted-foreground">{user.email}</p>
+                          <div className="font-medium">{user.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            {user.email}
+                          </div>
                         </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="text-sm text-muted-foreground">
+                        {user.id}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -200,6 +215,9 @@ export default function UsersPage() {
                       <Badge className={`${statusMap[user.status].color} text-white`}>
                         {statusMap[user.status].label}
                       </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <Balance userId={user.id} />
                     </TableCell>
                     <TableCell>
                       {formatDistanceToNow(new Date(user.createdAt), {

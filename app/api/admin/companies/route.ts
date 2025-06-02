@@ -1,51 +1,58 @@
 import { NextResponse } from "next/server"
+import fs from "fs/promises"
+import path from "path"
 
-const mockCompanies = [
-  {
-    id: "1",
-    name: "Tech Corp",
-    email: "contact@techcorp.com",
-    phone: "+55 11 99999-9999",
-    website: "https://techcorp.com",
-    location: "São Paulo, SP",
-    logo: "",
-    status: "active",
-    totalJobs: 15,
-    totalHires: 8,
-    rating: 4.5,
-    createdAt: "2024-01-01T00:00:00.000Z",
-  },
-  {
-    id: "2",
-    name: "Dev Solutions",
-    email: "contact@devsolutions.com",
-    phone: "+55 11 88888-8888",
-    website: "https://devsolutions.com",
-    location: "Rio de Janeiro, RJ",
-    logo: "",
-    status: "active",
-    totalJobs: 10,
-    totalHires: 5,
-    rating: 4.2,
-    createdAt: "2024-01-02T00:00:00.000Z",
-  },
-  {
-    id: "3",
-    name: "Digital Systems",
-    email: "contact@digitalsystems.com",
-    phone: "+55 11 77777-7777",
-    website: "https://digitalsystems.com",
-    location: "Belo Horizonte, MG",
-    logo: "",
-    status: "banned",
-    totalJobs: 5,
-    totalHires: 2,
-    rating: 3.8,
-    createdAt: "2024-01-03T00:00:00.000Z",
-  },
-]
+interface User {
+  id: string
+  name: string
+  email: string
+  role: string
+  avatar: string
+  phone: string
+  website?: string
+  location?: string
+  status?: "active" | "banned"
+  totalJobs?: number
+  totalHires?: number
+  rating?: number
+  createdAt?: string
+}
+
+// Função para carregar os usuários do arquivo
+async function loadUsers(): Promise<User[]> {
+  try {
+    const usersPath = path.join(process.cwd(), "data", "users.txt")
+    const data = await fs.readFile(usersPath, "utf-8")
+    return JSON.parse(data)
+  } catch (error) {
+    console.error("Erro ao carregar usuários:", error)
+    return []
+  }
+}
 
 export async function GET() {
-  // Aqui você deve buscar as empresas do banco de dados
-  return NextResponse.json(mockCompanies)
+  try {
+    const users = await loadUsers()
+    
+    // Filtra apenas empresas e adiciona campos padrão
+    const companies = users
+      .filter(user => user.role === "company")
+      .map(company => ({
+        ...company,
+        status: company.status || "active",
+        totalJobs: company.totalJobs || 0,
+        totalHires: company.totalHires || 0,
+        rating: company.rating || 0,
+        createdAt: company.createdAt || new Date().toISOString(),
+        logo: company.avatar // Usa o avatar como logo
+      }))
+
+    return NextResponse.json(companies)
+  } catch (error) {
+    console.error("Erro ao buscar empresas:", error)
+    return NextResponse.json(
+      { error: "Erro interno do servidor" },
+      { status: 500 }
+    )
+  }
 }
