@@ -132,21 +132,21 @@ export default function ApplicationsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-4">
                     <Avatar>
-                      <AvatarImage src={application.job.company.avatar} alt={application.job.company.name} />
-                      <AvatarFallback>{application.job.company.name[0]}</AvatarFallback>
+                      <AvatarImage src={application.job?.company?.avatar || "/placeholder.svg"} alt={application.job?.company?.name || "Empresa"} />
+                      <AvatarFallback>{application.job?.company?.name ? application.job.company.name[0] : "?"}</AvatarFallback>
                     </Avatar>
                     <div>
                       <CardTitle className="text-lg">{application.job.title}</CardTitle>
                       <CardDescription className="flex items-center">
                         <Building2 className="h-4 w-4 mr-1" />
-                        {application.job.company.name}
+                        {application.job?.company?.name || "Empresa"}
                       </CardDescription>
                     </div>
                   </div>
                   <Badge 
-                    className={`${statusMap[application.status].color} text-white`}
+                    className={`${statusMap[application.status]?.color || 'bg-gray-400'} text-white`}
                   >
-                    {statusMap[application.status].label}
+                    {statusMap[application.status]?.label || application.status || 'Desconhecido'}
                   </Badge>
                 </div>
               </CardHeader>
