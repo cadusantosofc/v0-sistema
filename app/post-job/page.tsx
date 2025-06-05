@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -17,36 +17,37 @@ import { useJobs } from "@/lib/jobs-context"
 import { useWallet } from "@/hooks/use-wallet"
 
 export default function PostJobPage() {
-  const { user, updateWallet, getAllUsers } = useAuth()
+  const { user } = useAuth()
   const { createJob } = useJobs()
-  const { balance } = useWallet(user?.id || "")
+  const { balance, reloadBalance, updateBalance } = useWallet(user?.id || "")
   const router = useRouter()
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
   const [newRequirement, setNewRequirement] = useState("")
+  type JobType = 'full_time' | 'part_time' | 'contract' | 'internship';
+  
   const [formData, setFormData] = useState({
     title: "",
     description: "",
-    category: "",
+    category: "servicos",
     location: "",
-    type: "remote" as "remote" | "presencial" | "freelance",
-    salary: "",
+    type: "full_time" as JobType, // remote = full_time, presencial = part_time, freelance = contract
+    payment_amount: "",
     requirements: [] as string[],
   })
 
-  if (!user || user.role !== "company") {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Alert variant="destructive">
-          <AlertDescription>Acesso negado. Apenas empresas podem publicar vagas.</AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
-  const jobCost = 10 // Comissão do sistema: R$10
+  const jobCost = 10 // Taxa fixa (comissão) para publicar a vaga: R$10
   const currentBalance = balance
+  const salaryValue = parseFloat(formData.payment_amount || "0")
+  const totalCost = jobCost + salaryValue // Custo total: taxa fixa + valor da vaga
+
+  // Atualiza o saldo ao carregar a página
+  useEffect(() => {
+    if (user?.id) {
+      reloadBalance();
+    }
+  }, [user?.id, reloadBalance]);
 
   const addRequirement = () => {
     if (newRequirement.trim() && !formData.requirements.includes(newRequirement.trim())) {
@@ -65,72 +66,175 @@ export default function PostJobPage() {
     })
   }
 
+  const resetForm = () => {
+    setFormData({
+      title: "",
+      description: "",
+      category: "servicos",
+      location: "",
+      type: "full_time" as JobType,
+      payment_amount: "",
+      requirements: []
+    });
+    setNewRequirement("");
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError("")
-    setSuccess("")
+    e.preventDefault();
+    setIsLoading(true);
+    setError("");
+    setSuccess("");
 
-    const salary = Number.parseFloat(formData.salary)
-    const totalCost = jobCost + salary // R$10 commission + salary to be held
+    console.log('Formulário submetido:', formData);
 
-    if (currentBalance < totalCost) {
-      setError(
-        `Saldo insuficiente. Você precisa de R$ ${totalCost.toFixed(2)} (R$ ${jobCost} comissão do sistema + R$ ${salary.toFixed(2)} para garantia do pagamento).`,
-      )
-      return
+    // Cria uma cópia do formData para não alterar o estado original durante a validação
+    const formDataCopy = { ...formData };
+
+    if (!formDataCopy.category) {
+      formDataCopy.category = "servicos";
     }
 
-    if (!formData.salary || salary <= 0) {
-      setError("Informe um valor válido para o salário")
-      return
+    // Melhorar a conversão do salário
+    let salary = 0;
+    try {
+      // Garantir que estamos usando um número válido
+      salary = formDataCopy.payment_amount ? Number.parseFloat(formDataCopy.payment_amount.toString().replace(',', '.')) : 0;
+      console.log('Salário após conversão:', salary);
+      
+      // Se não for um número válido, considera como 0
+      if (isNaN(salary)) {
+        console.log('Salário inválido, usando 0');
+        salary = 0;
+      }
+      
+      // Atualizar no formDataCopy
+      formDataCopy.payment_amount = salary.toString();
+      
+    } catch (e) {
+      console.error('Erro ao converter salário:', e);
+      formDataCopy.payment_amount = "0";
     }
 
-    setIsLoading(true)
+    // Validação de campos obrigatórios
+    const requiredFields = [
+      { field: 'title', label: 'Título' },
+      { field: 'description', label: 'Descrição' },
+      { field: 'location', label: 'Localização' },
+      { field: 'type', label: 'Tipo de trabalho' },
+      { field: 'payment_amount', label: 'Faixa salarial' }
+    ];
+
+    // Adicionar logs para depuração
+    console.log('Valores dos campos do formulário após processamento:');
+    console.log('Título:', formDataCopy.title);
+    console.log('Descrição:', formDataCopy.description);
+    console.log('Localização:', formDataCopy.location);
+    console.log('Tipo:', formDataCopy.type);
+    console.log('Salário:', formDataCopy.payment_amount);
+
+    // Verificar campos vazios com tratamento mais robusto
+    const missingFields = requiredFields.filter(field => {
+      const value = formDataCopy[field.field as keyof typeof formDataCopy];
+      
+      // Tratar cada tipo de campo de forma específica
+      if (field.field === 'payment_amount') {
+        // Para salário, verificar se é um número válido maior que zero
+        const numValue = parseFloat(String(value).replace(',', '.'));
+        console.log(`Verificando salário: ${value} -> ${numValue}`);
+        // Permitimos salário zero (trabalho voluntário)
+        return isNaN(numValue);
+      } else {
+        // Para outros campos, verificar se está vazio ou contém apenas espaços
+        return !value || (typeof value === 'string' && value.trim() === '');
+      }
+    });
+
+    if (missingFields.length > 0) {
+      const errorMsg = `Por favor, preencha os seguintes campos obrigatórios: ${missingFields.map(f => f.label).join(', ')}`;
+      console.error('Campos faltando:', missingFields);
+      setError(errorMsg);
+      setIsLoading(false);
+      return;
+    }
+
+    // Atualizar o formData original com os valores corrigidos
+    setFormData(formDataCopy);
+
+    // Recalcular o custo total com o salário correto
+    const updatedTotalCost = jobCost + salary;
+    
+    // Verifica saldo
+    if (currentBalance < updatedTotalCost) {
+      setError(`Saldo insuficiente. Você tem R$ ${currentBalance.toFixed(2)}, mas precisa de R$ ${updatedTotalCost.toFixed(2)} para publicar a vaga.`);
+      setIsLoading(false);
+      return;
+    }
 
     try {
-      const jobId = createJob({
-        title: formData.title,
-        description: formData.description,
-        category: formData.category,
-        location: formData.location,
-        type: formData.type,
-        salary: salary,
-        companyId: user.id,
-        companyName: user.name,
-        companyLogo: user.avatar,
-        status: "active",
-        requirements: formData.requirements,
-      })
-
-      if (jobId) {
-        // Deduzir valor total da carteira da empresa
-        const response = await fetch(`/api/wallet/${user.id}`, {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            amount: -totalCost,
-            description: `Vaga: ${formData.title} - Garantia de pagamento e comissão`
-          })
-        })
-
-        if (!response.ok) {
-          throw new Error("Erro ao processar pagamento")
-        }
-
-        setSuccess("Vaga publicada com sucesso! O valor foi retido como garantia.")
-        setTimeout(() => {
-          router.push("/dashboard")
-        }, 2000)
-      } else {
-        setError("Erro ao publicar vaga. Tente novamente.")
+      // Prepara os dados
+      if (!user) {
+        setError("Usuário não autenticado.");
+        setIsLoading(false);
+        return;
       }
-    } catch (err) {
-      setError("Erro ao publicar vaga. Tente novamente.")
+      const jobData = {
+        ...formDataCopy,
+        requirements: formDataCopy.requirements.join(", "),
+        company_id: user.id,
+        status: "open",
+        payment_amount: Number(salary)
+      };
+      if ('salary' in jobData) {
+        delete jobData.salary;
+      }
+
+      console.log('Enviando dados para API:', jobData);
+
+      // Envia para a API
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jobData),
+      });
+
+      const responseData = await response.json();
+
+      if (!response.ok || !responseData?.id) {
+        let errorMsg = responseData?.error || 
+                        `Erro ao criar vaga: ${response.status} ${response.statusText}`;
+        setError(errorMsg);
+        setIsLoading(false);
+        return;
+      }
+
+      const jobId = responseData.id;
+      console.log('Vaga criada com sucesso, ID:', jobId);
+
+      setSuccess('Vaga publicada com sucesso! Redirecionando para o dashboard...');
+      await reloadBalance();
+      resetForm();
+      setTimeout(() => {
+        router.push('/dashboard');
+      }, 3000);
+    } catch (error: any) {
+      console.error('Erro ao criar vaga:', error);
+      setError(`Erro ao criar vaga: ${error.message}`);
     } finally {
-      setIsLoading(false)
+      setIsLoading(false);
     }
+  };
+
+  // Verificação de acesso movida para dentro do return
+  if (!user || user.role !== "company") {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertDescription>Acesso negado. Apenas empresas podem publicar vagas.</AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   return (
@@ -165,15 +269,14 @@ export default function PostJobPage() {
             <div className="text-right">
               <p className="text-sm text-gray-600">Custo total</p>
               <p className="text-xl font-bold text-blue-600">
-                R$ {(jobCost + Number.parseFloat(formData.salary || "0")).toFixed(2)}
+                R$ {totalCost.toFixed(2)}
               </p>
-              <p className="text-xs text-gray-500">Publicação + Garantia</p>
+              <p className="text-xs text-gray-500">Publicação</p>
             </div>
           </div>
           <div className="mt-4 p-3 bg-blue-50 rounded-lg">
             <p className="text-sm text-blue-800">
-              <strong>Como funciona:</strong> R$ {jobCost} para publicar a vaga + valor do salário fica retido como
-              garantia até a conclusão do trabalho.
+              <strong>Como funciona:</strong> R$ {jobCost} de taxa fixa + R$ {salaryValue} (valor que você pagará ao profissional)
             </p>
           </div>
         </CardContent>
@@ -207,7 +310,7 @@ export default function PostJobPage() {
                   disabled={isLoading}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Selecione a categoria" />
+                    <SelectValue placeholder="Selecione uma categoria" />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="desenvolvimento">Desenvolvimento</SelectItem>
@@ -217,131 +320,147 @@ export default function PostJobPage() {
                     <SelectItem value="administrativo">Administrativo</SelectItem>
                     <SelectItem value="servicos">Serviços Gerais</SelectItem>
                     <SelectItem value="eventos">Eventos</SelectItem>
-                    <SelectItem value="outros">Outros</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="description">Descrição da Vaga *</Label>
-              <Textarea
-                id="description"
-                placeholder="Ex: Preciso de um garçom para trabalhar hoje das 18h às 22h em um evento corporativo. Experiência necessária."
-                value={formData.description}
-                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                rows={4}
-                required
-                disabled={isLoading}
-              />
-            </div>
-
             <div className="grid md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="type">Tipo de trabalho *</Label>
+                <Select
+                  value={formData.type}
+                  onValueChange={(value: JobType) => setFormData({ ...formData, type: value })}
+                  disabled={isLoading}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Tipo de trabalho" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="full_time">Remoto</SelectItem>
+                    <SelectItem value="part_time">Presencial</SelectItem>
+                    <SelectItem value="contract">Freelance</SelectItem>
+                    <SelectItem value="internship">Estágio</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="payment_amount">Valor da Vaga *</Label>
+                <div className="flex items-center gap-2">
+                  <span className="text-xl font-semibold text-gray-600">R$</span>
+                  <Input
+                    id="payment_amount"
+                    type="text"
+                    placeholder="0,00"
+                    value={formData.payment_amount}
+                    onChange={(e) => {
+                      // Permitir apenas números, vírgula e ponto
+                      const rawValue = e.target.value;
+                      const sanitizedValue = rawValue.replace(/[^\d.,]/g, '');
+                      
+                      // Converter vírgula para ponto (padrão internacional)
+                      const normalizedValue = sanitizedValue.replace(',', '.');
+                      
+                      // Validar se é um número
+                      const isValid = normalizedValue === '' || !isNaN(parseFloat(normalizedValue));
+                      
+                      if (isValid) {
+                        setFormData({ ...formData, payment_amount: sanitizedValue });
+                        console.log(`Campo de salário atualizado: ${sanitizedValue}`);
+                      }
+                    }}
+                    required
+                    disabled={isLoading}
+                    className="w-full"
+                  />
+                </div>
+              </div>
+
               <div className="space-y-2">
                 <Label htmlFor="location">Localização *</Label>
                 <Input
                   id="location"
-                  placeholder="Ex: São Paulo, SP"
+                  placeholder="Ex: São Paulo"
                   value={formData.location}
                   onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                   required
                   disabled={isLoading}
                 />
               </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="type">Modalidade *</Label>
-                <Select
-                  value={formData.type}
-                  onValueChange={(value: any) => setFormData({ ...formData, type: value })}
-                  disabled={isLoading}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="remote">Remoto</SelectItem>
-                    <SelectItem value="presencial">Presencial</SelectItem>
-                    <SelectItem value="freelance">Freelance</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="salary">Pagamento (R$) *</Label>
-                <div className="relative">
-                  <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input
-                    id="salary"
-                    type="number"
-                    placeholder="70"
-                    value={formData.salary}
-                    onChange={(e) => setFormData({ ...formData, salary: e.target.value })}
-                    className="pl-10"
-                    min="0"
-                    step="0.01"
-                    required
-                    disabled={isLoading}
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* Requirements */}
             <div className="space-y-4">
-              <Label>Requisitos e Habilidades</Label>
-
-              <div className="flex gap-2">
-                <Input
-                  placeholder="Ex: Experiência em eventos, Uniforme próprio"
-                  value={newRequirement}
-                  onChange={(e) => setNewRequirement(e.target.value)}
-                  onKeyPress={(e) => e.key === "Enter" && (e.preventDefault(), addRequirement())}
+              <div>
+                <Label htmlFor="description">Descrição da Vaga *</Label>
+                <Textarea
+                  id="description"
+                  placeholder="Descreva as responsabilidades e requisitos do trabalho..."
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  required
                   disabled={isLoading}
                 />
-                <Button type="button" onClick={addRequirement} disabled={isLoading}>
-                  <Plus className="h-4 w-4" />
-                </Button>
               </div>
 
-              {formData.requirements.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {formData.requirements.map((req, index) => (
-                    <Badge key={index} variant="secondary" className="flex items-center gap-1">
-                      {req}
+              <div>
+                <Label>Requisitos *</Label>
+                <div className="space-y-2">
+                  <div className="flex gap-2 items-center">
+                    <Input
+                      type="text"
+                      placeholder="Ex: Conhecimento em HTML"
+                      value={newRequirement}
+                      onChange={(e) => setNewRequirement(e.target.value)}
+                      disabled={isLoading}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={addRequirement}
+                      disabled={isLoading || !newRequirement.trim()}
+                    >
+                      <Plus className="w-4 h-4 mr-2" />
+                      Adicionar
+                    </Button>
+                  </div>
+
+                  {formData.requirements.map((requirement, index) => (
+                    <div key={requirement} className="flex items-center gap-2">
+                      <Badge>{requirement}</Badge>
                       <Button
                         type="button"
                         variant="ghost"
                         size="sm"
-                        className="h-4 w-4 p-0 hover:bg-transparent"
                         onClick={() => removeRequirement(index)}
                         disabled={isLoading}
                       >
-                        <X className="h-3 w-3" />
+                        <X className="w-4 h-4" />
                       </Button>
-                    </Badge>
+                    </div>
                   ))}
                 </div>
-              )}
-            </div>
+              </div>
 
-            <div className="flex justify-end space-x-4 pt-6 border-t">
-              <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
-                Cancelar
-              </Button>
-              <Button
-                type="submit"
-                disabled={isLoading || currentBalance < jobCost + Number.parseFloat(formData.salary || "0")}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Publicando...
-                  </>
-                ) : (
-                  `Publicar Vaga (R$ ${(jobCost + Number.parseFloat(formData.salary || "0")).toFixed(2)})`
-                )}
-              </Button>
+              <div className="flex gap-2">
+                <Button type="button" variant="outline" onClick={() => router.back()} disabled={isLoading}>
+                  Cancelar
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isLoading || currentBalance < totalCost}
+                >
+                  {isLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Publicando...
+                    </>
+                  ) : (
+                    `Publicar Vaga (R$ ${totalCost.toFixed(2)})`
+                  )}
+                </Button>
+              </div>
             </div>
           </form>
         </CardContent>

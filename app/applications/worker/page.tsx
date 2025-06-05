@@ -135,7 +135,7 @@ export default function WorkerApplicationsPage() {
                     </p>
                     <div className="flex items-center gap-2 text-xs text-muted-foreground">
                       <Badge variant="outline">
-                        R$ {application.job.salary.toLocaleString("pt-BR")}
+                        R$ {application.job.salary ? application.job.salary.toLocaleString("pt-BR") : application.job.payment_amount ? application.job.payment_amount.toLocaleString("pt-BR") : application.job.salary_range || '0,00'}
                       </Badge>
                       <Badge variant="outline">{application.job.type}</Badge>
                       <span>

@@ -1,97 +1,129 @@
-import { NextResponse } from "next/server"
+import { NextResponse } from "next/server";
+import { getWalletByUserId, createWallet, updateWalletBalance } from "../../../src/models/wallet";
+import { createTransaction, listUserTransactions } from "../../../src/models/transaction";
+import { getUserById } from "../../../src/models/user";
+import { RowDataPacket } from "mysql2";
 
-// Mock de dados - substituir por banco de dados real
-const wallets = [
-  {
-    id: "1",
-    userId: "user1",
-    balance: 0,
-    transactions: []
-  }
-]
+type Transaction = {
+  id: string;
+  from_wallet_id: string;
+  to_wallet_id: string;
+  amount: number;
+  type: 'deposit' | 'withdrawal' | 'transfer' | 'payment' | 'refund';
+  status: 'pending' | 'completed' | 'failed';
+  description?: string;
+  created_at: string;
+  sender_id?: string;
+  receiver_id?: string;
+};
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
+    const { searchParams } = new URL(request.url);
+    const userId = searchParams.get("userId");
 
     if (!userId) {
       return NextResponse.json(
         { error: "userId é obrigatório" },
         { status: 400 }
-      )
+      );
     }
 
-    // Encontra ou cria carteira
-    let wallet = wallets.find(w => w.userId === userId)
+    // Verifica se usuário existe
+    const user = await getUserById(userId);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Usuário não encontrado" },
+        { status: 404 }
+      );
+    }
+
+    // Busca ou cria carteira
+    let wallet = await getWalletByUserId(userId);
     if (!wallet) {
-      wallet = {
-        id: Math.random().toString(36).substring(7),
-        userId,
-        balance: 0,
-        transactions: []
-      }
-      wallets.push(wallet)
+      wallet = await createWallet(userId);
     }
 
-    return NextResponse.json(wallet)
+    // Busca transações
+    const transactions = await listUserTransactions(userId);
+    
+    // Mapeia as transações para o formato esperado pelo frontend
+    const formattedTransactions = transactions.map(t => ({
+      id: t.id,
+      from_wallet_id: t.from_wallet_id,
+      to_wallet_id: t.to_wallet_id,
+      sender_id: t.sender_id,
+      receiver_id: t.receiver_id,
+      amount: Number(t.amount),
+      type: t.type,
+      status: t.status,
+      description: t.description || '',
+      created_at: new Date(t.created_at).toISOString()
+    }));
+
+    return NextResponse.json(formattedTransactions);
   } catch (error) {
-    console.error("Erro ao buscar carteira:", error)
+    console.error("Erro ao buscar transações:", error);
     return NextResponse.json(
-      { error: "Erro interno do servidor" },
+      { error: error instanceof Error ? error.message : "Erro ao buscar transações" },
       { status: 500 }
-    )
+    );
   }
 }
 
 export async function POST(request: Request) {
   try {
-    const body = await request.json()
-    const { userId, type, amount, description, jobId, status = "completed" } = body
+    const body = await request.json();
+    const { userId, type, amount, description, jobId, status = "completed" } = body;
 
     if (!userId || !type || !amount || !description) {
       return NextResponse.json(
         { error: "Dados inválidos" },
         { status: 400 }
-      )
+      );
     }
 
-    // Encontra ou cria carteira
-    let wallet = wallets.find(w => w.userId === userId)
+    // Verifica se usuário existe
+    const user = await getUserById(userId);
+    if (!user) {
+      return NextResponse.json(
+        { error: "Usuário não encontrado" },
+        { status: 404 }
+      );
+    }
+
+    // Busca ou cria carteira
+    let wallet = await getWalletByUserId(userId);
     if (!wallet) {
-      wallet = {
-        id: Math.random().toString(36).substring(7),
-        userId,
-        balance: 0,
-        transactions: []
-      }
-      wallets.push(wallet)
+      wallet = await createWallet(userId);
     }
 
     // Cria transação
-    const transaction = {
-      id: Math.random().toString(36).substring(7),
-      type,
+    const transaction = await createTransaction({
+      sender_id: type === "credit" ? "admin-1" : userId,
+      receiver_id: type === "credit" ? userId : "admin-1",
       amount,
-      description,
-      jobId,
+      type: type === "credit" ? "deposit" : "withdrawal",
       status,
-      createdAt: new Date().toISOString()
-    }
+      description,
+      job_id: jobId
+    });
 
-    // Adiciona transação e atualiza saldo
-    wallet.transactions.unshift(transaction)
+    // Atualiza saldo se transação completada
     if (status === "completed") {
-      wallet.balance += type === "credit" ? amount : -amount
+      await updateWalletBalance(
+        userId,
+        type === "credit" ? amount : -amount
+      );
     }
 
-    return NextResponse.json(transaction)
+    return NextResponse.json(transaction);
   } catch (error) {
-    console.error("Erro ao criar transação:", error)
+    console.error("Erro ao criar transação:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
       { status: 500 }
-    )
+    );
   }
 }
 
@@ -99,20 +131,18 @@ export async function POST(request: Request) {
 export async function creditJobPayment(jobId: string, workerId: string, amount: number) {
   try {
     // Credita o valor para o trabalhador
-    await fetch("/api/wallet", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify({
-        userId: workerId,
-        type: "credit",
-        amount,
-        description: `Pagamento do trabalho #${jobId}`,
-        jobId,
-        status: "completed"
-      })
-    })
+    const transaction = await createTransaction({
+      sender_id: "admin-1",
+      receiver_id: workerId,
+      amount,
+      type: "job_payment",
+      status: "completed",
+      description: `Pagamento do trabalho #${jobId}`,
+      job_id: jobId
+    });
+
+    // Atualiza saldo do trabalhador
+    await updateWalletBalance(workerId, amount);
 
     // Notifica o trabalhador
     await fetch("/api/notifications", {
@@ -127,11 +157,11 @@ export async function creditJobPayment(jobId: string, workerId: string, amount: 
         message: `Você recebeu R$ ${amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} pelo trabalho #${jobId}`,
         data: { jobId, amount }
       })
-    })
+    });
 
-    return true
+    return true;
   } catch (error) {
-    console.error("Erro ao creditar pagamento:", error)
-    return false
+    console.error("Erro ao creditar pagamento:", error);
+    return false;
   }
 }

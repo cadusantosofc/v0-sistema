@@ -1,5 +1,6 @@
 "use client"
 
+import React from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,12 +17,16 @@ import {
   X,
   Calendar,
   ExternalLink,
+  Eye,
+  Edit,
 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { useJobs } from "@/lib/jobs-context"
 import { useChat } from "@/lib/chat-context"
 import { Balance } from "@/components/wallet/balance"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -40,8 +45,26 @@ export default function DashboardPage() {
 }
 
 function LatestJobsCard() {
-  const { getLatestJobs } = useJobs()
-  const latestJobs = getLatestJobs(5)
+  const { getAllJobs } = useJobs()
+  
+  // Obter todas as vagas
+  const allJobs = getAllJobs()
+  
+  // Filtrar apenas vagas com status 'open', 'active' ou 'published'
+  const activeJobs = allJobs.filter(job => {
+    const status = job.status?.toLowerCase() || '';
+    return ['open', 'active', 'published'].includes(status);
+  });
+  
+  // Ordenar as vagas ativas por data de criação (mais recentes primeiro)
+  const latestJobs = activeJobs
+    .slice()
+    .sort((a, b) => {
+      const dateA = new Date(a.createdAt || a.created_at).getTime();
+      const dateB = new Date(b.createdAt || b.created_at).getTime();
+      return dateB - dateA;
+    })
+    .slice(0, 5);
 
   return (
     <Card>
@@ -66,16 +89,28 @@ function LatestJobsCard() {
                     <p className="text-xs text-gray-500">{job.location}</p>
                     <div className="flex items-center space-x-2 text-xs text-gray-500 mt-1">
                       <Calendar className="h-3 w-3" />
-                      <span>{new Date(job.createdAt).toLocaleDateString("pt-BR")}</span>
+                      <span>{new Date(job.created_at || job.createdAt).toLocaleDateString("pt-BR")}</span>
                       <span>
-                        {new Date(job.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                        {new Date(job.created_at || job.createdAt).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
                       </span>
                     </div>
                   </div>
                   <div className="text-right">
-                    <p className="font-medium text-green-600">R$ {job.salary.toLocaleString("pt-BR")}</p>
-                    <Badge variant="default">{job.status === "active" ? "Ativa" : "Em andamento"}</Badge>
-                    <p className="text-xs text-gray-500 mt-1">{job.type}</p>
+                    <p className="font-medium text-green-600">
+                      {job.salary_range ? `R$ ${job.salary_range}` : 'A combinar'}
+                    </p>
+                    <Badge variant="default">
+                      {job.status === "active" || job.status === "open" ? "Ativa" : 
+                       job.status === "in_progress" ? "Em andamento" : 
+                       job.status === "completed" ? "Concluída" : 
+                       job.status.charAt(0).toUpperCase() + job.status.slice(1)}
+                    </Badge>
+                    <p className="text-xs text-gray-500 mt-1">
+                      {job.type === 'full_time' ? 'Tempo integral' :
+                       job.type === 'part_time' ? 'Meio período' :
+                       job.type === 'contract' ? 'Contrato' :
+                       job.type === 'internship' ? 'Estágio' : job.type}
+                    </p>
                   </div>
                 </div>
               </Link>
@@ -113,6 +148,9 @@ function WorkerDashboard() {
 
   // Calculate monthly income
   const monthlyIncome = 0 // TODO: Implementar cálculo de renda mensal usando novo sistema
+
+  // Recent Applications (WorkerDashboard)
+  const recentApplications = applications; // Mostra todas as candidaturas, sem filtro de status
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -181,10 +219,9 @@ function WorkerDashboard() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {userApplications.slice(0, 5).map((application) => {
-                const job = jobs.find((j) => j.id === application.jobId)
-                if (!job) return null
-
+              {recentApplications.map((application) => {
+                const job = jobs.find((j) => j.id === (application.jobId || application.job_id));
+                if (!job) return null;
                 return (
                   <Link key={application.id} href={`/jobs/${job.id}`}>
                     <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
@@ -195,11 +232,11 @@ function WorkerDashboard() {
                         </div>
                         <p className="text-sm text-gray-600">{job.companyName}</p>
                         <p className="text-xs text-gray-500">
-                          {new Date(application.appliedAt).toLocaleDateString("pt-BR")}
+                          {new Date(application.appliedAt || application.created_at).toLocaleDateString("pt-BR")}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="font-medium">R$ {job.salary.toLocaleString("pt-BR")}</p>
+                        <p className="font-medium">R$ {job.salary ? job.salary.toFixed(2) : job.payment_amount ? job.payment_amount.toFixed(2) : '0.00'}</p>
                         <Badge
                           variant={
                             application.status === "completed"
@@ -208,12 +245,19 @@ function WorkerDashboard() {
                                 ? "default"
                                 : application.status === "pending"
                                   ? "secondary"
-                                  : "destructive"
+                                  : application.status === "accepted_by_company"
+                                    ? "warning"
+                                    : application.status === "cancelled"
+                                      ? "destructive"
+                                      : application.status === "rejected"
+                                        ? "destructive"
+                                        : "outline"
                           }
                         >
                           {application.status === "pending" && <Clock className="h-3 w-3 mr-1" />}
                           {application.status === "completed" && <CheckCircle className="h-3 w-3 mr-1" />}
                           {application.status === "rejected" && <X className="h-3 w-3 mr-1" />}
+                          {application.status === "cancelled" && <X className="h-3 w-3 mr-1" />}
                           {application.status === "pending"
                             ? "Pendente"
                             : application.status === "accepted_by_company"
@@ -222,14 +266,18 @@ function WorkerDashboard() {
                                 ? "Ativo"
                                 : application.status === "completed"
                                   ? "Concluído"
-                                  : "Recusado"}
+                                  : application.status === "cancelled"
+                                    ? "Cancelada"
+                                    : application.status === "rejected"
+                                      ? "Recusada"
+                                      : application.status}
                         </Badge>
                       </div>
                     </div>
                   </Link>
-                )
+                );
               })}
-              {userApplications.length === 0 && (
+              {recentApplications.length === 0 && (
                 <p className="text-center text-gray-500 py-4">Nenhuma candidatura ainda</p>
               )}
             </div>
@@ -246,65 +294,79 @@ function WorkerDashboard() {
 function CompanyDashboard() {
   const { user } = useAuth()
   const { getJobsByCompany, applications, getJobStats, acceptApplication, rejectApplication, completeJob } = useJobs()
-  // TODO: Implementar cálculo de transações usando novo sistema // Corrigido erro de lint
+  const [companyJobs, setCompanyJobs] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = React.useState<string | null>(null)
 
-  if (!user) return null
+  // Função para carregar vagas da empresa
+  const loadCompanyJobs = React.useCallback(async () => {
+    if (!user) return;
+    try {
+      setLoading(true);
+      const jobs = await getJobsByCompany(user.id);
+      setCompanyJobs(Array.isArray(jobs) ? jobs : []);
+    } catch (err) {
+      console.error('Erro ao carregar vagas da empresa:', err);
+      setError('Erro ao carregar vagas');
+      setCompanyJobs([]);
+    } finally {
+      setLoading(false);
+    }
+  }, [user, getJobsByCompany]);
 
-  const companyJobs = getJobsByCompany(user.id)
-  // TODO: Implementar cálculo de saldo usando novo sistema
-  // ... (rest of the code remains the same)
-  const jobStats = getJobStats(user.id, "company")
+  // Efeito para verificar parâmetros na URL
+  React.useEffect(() => {
+    // Verificar se há um parâmetro de job_deleted na URL
+    const urlParams = new URLSearchParams(window.location.search);
+    const jobDeleted = urlParams.get('job_deleted') === 'true';
+    const errorParam = urlParams.get('error');
+    
+    if (jobDeleted) {
+      // Limpar o parâmetro da URL sem recarregar a página
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+      
+      // Mostrar mensagem de sucesso
+      setSuccessMessage('Vaga excluída com sucesso!');
+      setTimeout(() => setSuccessMessage(null), 3000);
+      
+      // Recarregar vagas
+      loadCompanyJobs();
+    }
+    
+    if (errorParam === 'job-not-found') {
+      // Limpar o parâmetro da URL sem recarregar a página
+      const newUrl = window.location.pathname;
+      window.history.replaceState({}, document.title, newUrl);
+      
+      // Mostrar mensagem de erro
+      setError('A vaga que você tentou acessar não existe mais.');
+      setTimeout(() => setError(null), 5000);
+    }
+  }, [loadCompanyJobs]);
 
-  // Default rating
-  const companyRating = 4.2
+  // Efeito para carregar vagas inicialmente
+  React.useEffect(() => {
+    loadCompanyJobs();
+  }, [loadCompanyJobs]);
+
+  if (!user) return null;
+
+  const jobStats = getJobStats(user.id, "company");
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <div className="flex justify-center items-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
 
   // Get applications for company jobs
-  const companyApplications = applications.filter((app) => companyJobs.some((job) => job.id === app.jobId))
-
-  const handleAcceptApplication = (applicationId: string) => {
-    const application = applications.find((app) => app.id === applicationId)
-    if (!application) return
-
-    acceptApplication(applicationId)
-
-    // Add notification manually
-    const notifications = JSON.parse(localStorage.getItem("notifications") || "[]")
-    const newNotification = {
-      id: Date.now().toString(),
-      userId: application.workerId,
-      type: "match",
-      title: "Candidatura Aceita!",
-      message: `Sua candidatura foi aceita! Agora você pode aceitar o trabalho.`,
-      read: false,
-      createdAt: new Date().toISOString(),
-      data: { applicationId },
-    }
-    notifications.push(newNotification)
-    localStorage.setItem("notifications", JSON.stringify(notifications))
-  }
-
-  const handleCompleteJob = (jobId: string) => {
-    const job = companyJobs.find((j) => j.id === jobId)
-    if (!job || !job.assignedWorkerId) return
-
-    completeJob(jobId)
-    // TODO: Implementar liberação de pagamento usando novo sistema, job.assignedWorkerId, () => {})
-
-    // Add notification manually
-    const notifications = JSON.parse(localStorage.getItem("notifications") || "[]")
-    const newNotification = {
-      id: Date.now().toString(),
-      userId: job.assignedWorkerId,
-      type: "payment",
-      title: "Trabalho Concluído!",
-      message: `O pagamento de R$ ${job.salary.toFixed(2)} foi liberado para sua carteira.`,
-      read: false,
-      createdAt: new Date().toISOString(),
-      data: { jobId },
-    }
-    notifications.push(newNotification)
-    localStorage.setItem("notifications", JSON.stringify(notifications))
-  }
+  const companyApplications = applications.filter((app) => companyJobs.some((job) => job.id === app.jobId));
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -312,6 +374,18 @@ function CompanyDashboard() {
         <h1 className="text-3xl font-bold">Dashboard Empresa</h1>
         <p className="text-gray-600">Gerencie suas vagas e candidatos, {user.name}.</p>
       </div>
+
+      {successMessage && (
+        <Alert className="mb-6">
+          <AlertDescription>{successMessage}</AlertDescription>
+        </Alert>
+      )}
+
+      {error && (
+        <Alert variant="destructive" className="mb-6">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
       {/* Stats Cards */}
       <div className="grid md:grid-cols-4 gap-6 mb-8">
@@ -356,90 +430,195 @@ function CompanyDashboard() {
             <Star className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{companyRating > 0 ? companyRating.toFixed(1) : "N/A"}</div>
-            <p className="text-xs text-muted-foreground">
-              {companyRating > 0 ? "Avaliação dos profissionais" : "Nenhuma avaliação ainda"}
-            </p>
+            <div className="text-2xl font-bold">4.2</div>
+            <p className="text-xs text-muted-foreground">Avaliação dos profissionais</p>
           </CardContent>
         </Card>
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-8">
-        {/* Active Jobs */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Vagas Ativas</CardTitle>
-              <CardDescription>Suas vagas publicadas</CardDescription>
-            </div>
-            <Link href="/post-job">
-              <Button size="sm">
-                <Plus className="h-4 w-4 mr-2" />
-                Nova Vaga
-              </Button>
-            </Link>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {companyJobs
-                .filter((job) => job.status === "active" || job.status === "in_progress")
-                .slice(0, 5)
-                .map((job) => {
-                  const jobApplications = applications.filter((app) => app.jobId === job.id)
-                  return (
-                    <Link key={job.id} href={`/jobs/${job.id}`}>
-                      <div className="flex items-center justify-between p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors">
-                        <div className="flex-1">
-                          <h4 className="font-medium text-blue-600 hover:text-blue-800">{job.title}</h4>
-                          <p className="text-sm text-gray-600">
-                            {jobApplications.length} candidato{jobApplications.length !== 1 ? "s" : ""}
-                          </p>
-                          <p className="text-xs text-gray-500">{new Date(job.createdAt).toLocaleDateString("pt-BR")}</p>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium">R$ {job.salary.toLocaleString("pt-BR")}</p>
-                          <Badge variant={job.status === "active" ? "default" : "secondary"}>
-                            {job.status === "active" ? "Ativa" : "Em andamento"}
-                          </Badge>
-                        </div>
-                        {job.status === "in_progress" && (
-                          <Button
-                            size="sm"
-                            onClick={(e) => {
-                              e.preventDefault()
-                              handleCompleteJob(job.id)
-                            }}
-                            className="ml-2"
-                          >
-                            <CheckCircle className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </Link>
-                  )
-                })}
-              {companyJobs.filter((job) => job.status === "active" || job.status === "in_progress").length === 0 && (
-                <p className="text-center text-gray-500 py-4">Nenhuma vaga ativa</p>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+      {/* Jobs section */}
+      <div className="mb-8">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-semibold">Minhas Vagas</h2>
+          <Link href="/post-job">
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              Nova vaga
+            </Button>
+          </Link>
+        </div>
 
-        {/* Latest Jobs */}
-        <LatestJobsCard />
+        {companyJobs.length === 0 ? (
+          <Card>
+            <CardContent className="py-8">
+              <div className="text-center">
+                <Briefcase className="h-12 w-12 mx-auto text-gray-400" />
+                <h3 className="mt-2 text-lg font-medium">Nenhuma vaga publicada</h3>
+                <p className="mt-1 text-gray-500">Comece criando sua primeira vaga</p>
+                <div className="mt-6">
+                  <Link href="/post-job">
+                    <Button>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Criar nova vaga
+                    </Button>
+                  </Link>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="grid md:grid-cols-2 gap-6">
+            {companyJobs.map((job) => (
+              <Card key={job.id} className="overflow-hidden">
+                <CardHeader className="pb-2">
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <CardTitle>{job.title}</CardTitle>
+                      <CardDescription>{job.location}</CardDescription>
+                    </div>
+                    <Badge variant={
+                      job.status === 'open' ? 'outline' : 
+                      job.status === 'in_progress' ? 'secondary' : 
+                      job.status === 'completed' ? 'default' : 
+                      'destructive'
+                    }>
+                      {job.status === 'open' ? 'Aberta' : 
+                       job.status === 'in_progress' ? 'Em andamento' : 
+                       job.status === 'completed' ? 'Concluída' : 
+                       job.status === 'cancelled' ? 'Cancelada' : 
+                       'Fechada'}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex justify-between mb-2">
+                    <div className="text-sm text-gray-500">Salário:</div>
+                    <div className="font-medium">R$ {job.salary ? job.salary.toFixed(2) : job.payment_amount ? job.payment_amount.toFixed(2) : '0.00'}</div>
+                  </div>
+                  <div className="flex justify-between mb-4">
+                    <div className="text-sm text-gray-500">Candidaturas:</div>
+                    <div className="font-medium">
+                      {applications.filter(app => app.jobId === job.id).length}
+                    </div>
+                  </div>
+                  <div className="flex justify-end space-x-2">
+                    <Link href={`/jobs/${job.id}`}>
+                      <Button variant="outline" size="sm">
+                        <Eye className="h-4 w-4 mr-1" />
+                        Detalhes
+                      </Button>
+                    </Link>
+                    {job.status === 'open' && (
+                      <Link href={`/jobs/${job.id}/edit`}>
+                        <Button variant="outline" size="sm">
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                      </Link>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Recent Applications */}
+      <div className="mb-8">
+        <h2 className="text-xl font-semibold mb-4">Candidaturas Recentes</h2>
+        {companyApplications.length > 0 ? (
+          <div className="space-y-4">
+            {companyApplications.slice(0, 5).map((app) => {
+              const job = companyJobs.find((j) => j.id === app.jobId);
+              if (!job) return null;
+              
+              return (
+                <Card key={app.id}>
+                  <CardContent className="p-4">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <h3 className="font-medium">{job.title}</h3>
+                        <p className="text-sm text-gray-500">
+                          Candidato: {app.workerName || "Nome não disponível"}
+                        </p>
+                      </div>
+                      <div className="flex items-center">
+                        <Badge
+                          variant={
+                            app.status === 'pending' ? 'outline' : 
+                            app.status === 'accepted_by_company' ? 'secondary' : 
+                            app.status === 'active' ? 'default' : 
+                            'destructive'
+                          }
+                        >
+                          {app.status === 'pending' ? 'Pendente' : 
+                           app.status === 'accepted_by_company' ? 'Aceito por você' : 
+                           app.status === 'active' ? 'Em andamento' : 
+                           app.status === 'completed' ? 'Concluído' : 
+                           'Rejeitado'}
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="mt-4 flex justify-end space-x-2">
+                      <Link href={`/jobs/${job.id}`}>
+                        <Button variant="outline" size="sm">
+                          Ver detalhes
+                        </Button>
+                      </Link>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        ) : (
+          <Card>
+            <CardContent className="py-6 text-center">
+              <p className="text-gray-500">Nenhuma candidatura recebida ainda</p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )
 }
 
 function AdminDashboard() {
+  const { user } = useAuth()
+  const { jobs } = useJobs()
   const { getAllUsers } = useAuth()
-  const { jobs, applications } = useJobs()
+  const [users, setUsers] = React.useState<any[]>([])
+  const [loading, setLoading] = React.useState(true)
 
-  const allUsers = getAllUsers()
-  const companies = allUsers.filter((u) => u.role === "company")
-  const workers = allUsers.filter((u) => u.role === "worker")
-  const totalWallet = allUsers.reduce((sum, u) => sum + u.wallet, 0)
+  React.useEffect(() => {
+    async function loadUsers() {
+      try {
+        const allUsers = await getAllUsers()
+        setUsers(allUsers || [])
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error)
+      } finally {
+        setLoading(false)
+      }
+    }
+    loadUsers()
+  }, [])
+
+  if (!user) return null
+
+  // Mostra loading enquanto os usuários não foram carregados
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <p>Carregando dados...</p>
+      </div>
+    )
+  }
+
+  const companies = users.filter((u) => u.role === "company")
+  const workers = users.filter((u) => u.role === "worker")
+  const totalWallet = users.reduce((sum, u) => sum + (u.wallet || 0), 0)
 
   return (
     <div className="container mx-auto px-4 py-8">
@@ -456,7 +635,7 @@ function AdminDashboard() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{allUsers.length}</div>
+            <div className="text-2xl font-bold">{users.length}</div>
             <p className="text-xs text-muted-foreground">
               {workers.length} profissionais, {companies.length} empresas
             </p>
@@ -480,7 +659,7 @@ function AdminDashboard() {
             <Wallet className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">R$ 0,00</div>
+            <div className="text-2xl font-bold">R$ {totalWallet.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>
             <p className="text-xs text-muted-foreground">Total em carteiras</p>
           </CardContent>
         </Card>
@@ -491,8 +670,8 @@ function AdminDashboard() {
             <Briefcase className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{jobs.length}</div>
-            <p className="text-xs text-muted-foreground">{jobs.filter((j) => j.status === "active").length} ativas</p>
+            <div className="text-2xl font-bold">{jobs?.length || 0}</div>
+            <p className="text-xs text-muted-foreground">{jobs?.filter((j) => j.status === "active")?.length || 0} ativas</p>
           </CardContent>
         </Card>
       </div>

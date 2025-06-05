@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     }
 
     // Validar tipo do arquivo
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "application/pdf"]
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp"]
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
         { error: "Tipo de arquivo não permitido" },
@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     // Gerar nome único para o arquivo
     const timestamp = Date.now()
     const extension = file.name.split(".").pop()
-    const fileName = `receipt-${timestamp}.${extension}`
+    const fileName = `avatar-${timestamp}.${extension}`
 
     // Criar pasta de uploads se não existir
     const uploadDir = join(process.cwd(), "public", "uploads")

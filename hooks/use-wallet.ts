@@ -92,14 +92,6 @@ export function useWallet(userId: string) {
   useEffect(() => {
     // Busca inicial
     fetchWallet()
-
-    // Polling a cada 10 segundos
-    const interval = setInterval(() => {
-      fetchWallet()
-    }, 10000)
-
-    // Limpa intervalo quando componente é desmontado
-    return () => clearInterval(interval)
   }, [fetchWallet])
 
   return {

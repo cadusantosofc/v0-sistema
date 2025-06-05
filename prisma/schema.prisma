@@ -59,3 +59,35 @@ model Transaction {
   // Relações
   wallet      Wallet   @relation(fields: [walletId], references: [id])
 }
+
+model Job {
+  id          String   @id @default(cuid())
+  companyId   String
+  title       String
+  description String
+  requirements String
+  salaryRange String
+  location    String
+  type        String   // "full_time", "part_time", "contract", "internship"
+  category    String
+  status      String   @default("open") // "open", "closed", "draft"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relações
+  company     User     @relation(fields: [companyId], references: [id])
+  applications Application[]
+}
+
+model Application {
+  id          String   @id @default(cuid())
+  jobId       String
+  applicantId String
+  status      String   @default("pending") // "pending", "accepted", "rejected"
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  // Relações
+  job         Job      @relation(fields: [jobId], references: [id])
+  applicant   User     @relation(fields: [applicantId], references: [id])
+}

@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { User, Building, Camera, Save, Loader2 } from "lucide-react"
 import { useAuth } from "@/lib/auth-context"
 import { Balance } from "@/components/wallet/balance"
+import { UserReviews } from "@/components/user-reviews"
 
 export default function ProfilePage() {
   const { user, updateProfile } = useAuth()
@@ -137,10 +138,13 @@ export default function ProfilePage() {
                     if (file) {
                       const reader = new FileReader()
                       reader.onloadend = () => {
+                        const base64String = reader.result as string
                         setFormData(prev => ({
                           ...prev,
-                          avatar: reader.result as string
+                          avatar: base64String
                         }))
+                        // Ativa o modo de edição automaticamente quando o usuário faz upload de uma imagem
+                        setIsEditing(true)
                       }
                       reader.readAsDataURL(file)
                     }
@@ -302,6 +306,11 @@ export default function ProfilePage() {
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Avaliações do usuário */}
+      <div className="mt-8">
+        <UserReviews userId={user.id} />
       </div>
 
       {/* Additional Stats for Workers */}

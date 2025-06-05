@@ -12,23 +12,34 @@ import { ptBR } from "date-fns/locale"
 import Link from "next/link"
 
 interface Application {
-  id: string
-  jobId: string
-  jobTitle: string
-  companyId: string
-  companyName: string
-  companyAvatar: string
-  location: string
-  salary: string
-  status: "pending" | "accepted" | "rejected" | "interviewing"
-  createdAt: string
+  id: number
+  job_id: string
+  worker_id: string
+  company_id: string
+  status: "pending" | "accepted" | "rejected" | "accepted_by_company" | "in_progress" | "active"
+  cover_letter: string
+  created_at: string
+  job: {
+    id: string
+    title: string
+    location: string
+    salary_range: string
+    company: {
+      id: string
+      name: string
+      avatar?: string
+    }
+    status: string
+  }
 }
 
 const statusMap = {
   pending: { label: "Pendente", color: "bg-yellow-500" },
   accepted: { label: "Aceito", color: "bg-green-500" },
   rejected: { label: "Recusado", color: "bg-red-500" },
-  interviewing: { label: "Em Entrevista", color: "bg-blue-500" },
+  accepted_by_company: { label: "Aceito pela empresa", color: "bg-green-500" },
+  in_progress: { label: "Em progresso", color: "bg-yellow-500" },
+  active: { label: "Ativo", color: "bg-green-500" }
 }
 
 export default function ApplicationsPage() {
@@ -39,21 +50,52 @@ export default function ApplicationsPage() {
   useEffect(() => {
     const fetchApplications = async () => {
       try {
-        // Aqui você deve integrar com sua API
-        const response = await fetch(`/api/users/${user?.id}/applications`)
-        const data = await response.json()
-        setApplications(data)
+        setLoading(true);
+        
+        if (!user?.id) {
+          console.error("ID do usuário não disponível");
+          return;
+        }
+        
+        console.log("Buscando candidaturas para o usuário:", user.id);
+        
+        // Verifica se é um trabalhador
+        if (user.role === 'worker') {
+          const response = await fetch(`/api/applications?userId=${user.id}`);
+          
+          if (!response.ok) {
+            throw new Error(`Erro ao buscar candidaturas: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log("Candidaturas encontradas:", data.length);
+          setApplications(data);
+        } 
+        // Se for uma empresa, busca as candidaturas para suas vagas
+        else if (user.role === 'company') {
+          const response = await fetch(`/api/applications?companyId=${user.id}`);
+          
+          if (!response.ok) {
+            throw new Error(`Erro ao buscar candidaturas: ${response.status}`);
+          }
+          
+          const data = await response.json();
+          console.log("Candidaturas para as vagas da empresa:", data.length);
+          setApplications(data);
+        }
       } catch (error) {
-        console.error("Erro ao carregar candidaturas:", error)
+        console.error("Erro ao carregar candidaturas:", error);
       } finally {
-        setLoading(false)
+        setLoading(false);
       }
-    }
+    };
 
     if (user) {
-      fetchApplications()
+      fetchApplications();
+    } else {
+      setLoading(false);
     }
-  }, [user])
+  }, [user]);
 
   if (!user) {
     return null
@@ -90,14 +132,14 @@ export default function ApplicationsPage() {
                 <div className="flex items-start justify-between">
                   <div className="flex items-center space-x-4">
                     <Avatar>
-                      <AvatarImage src={application.companyAvatar} alt={application.companyName} />
-                      <AvatarFallback>{application.companyName[0]}</AvatarFallback>
+                      <AvatarImage src={application.job.company.avatar} alt={application.job.company.name} />
+                      <AvatarFallback>{application.job.company.name[0]}</AvatarFallback>
                     </Avatar>
                     <div>
-                      <CardTitle className="text-lg">{application.jobTitle}</CardTitle>
+                      <CardTitle className="text-lg">{application.job.title}</CardTitle>
                       <CardDescription className="flex items-center">
                         <Building2 className="h-4 w-4 mr-1" />
-                        {application.companyName}
+                        {application.job.company.name}
                       </CardDescription>
                     </div>
                   </div>
@@ -112,21 +154,21 @@ export default function ApplicationsPage() {
                 <div className="grid gap-4">
                   <div className="flex items-center text-sm text-muted-foreground">
                     <MapPin className="h-4 w-4 mr-2" />
-                    {application.location}
+                    {application.job.location}
                     <DollarSign className="h-4 w-4 ml-4 mr-2" />
-                    {application.salary}
+                    {application.job.salary_range}
                     <Clock className="h-4 w-4 ml-4 mr-2" />
-                    {formatDistanceToNow(new Date(application.createdAt), {
+                    {formatDistanceToNow(new Date(application.created_at), {
                       addSuffix: true,
                       locale: ptBR,
                     })}
                   </div>
                   <div className="flex justify-end space-x-2">
-                    <Link href={`/jobs/${application.jobId}`}>
+                    <Link href={`/jobs/${application.job_id}`}>
                       <Button variant="outline">Ver Vaga</Button>
                     </Link>
-                    {application.status === "interviewing" && (
-                      <Link href={`/chat/${application.companyId}`}>
+                    {['accepted', 'accepted_by_company', 'in_progress', 'active'].includes(application.status) && (
+                      <Link href={`/chat/${application.job.company_id}`}>
                         <Button>
                           <MessageSquare className="h-4 w-4 mr-2" />
                           Chat com Empresa

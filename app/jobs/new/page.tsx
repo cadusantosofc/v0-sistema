@@ -30,18 +30,45 @@ export default function NewJobPage() {
         return
       }
 
-      // Debita o custo da vaga
-      const success = await updateBalance(-JOB_POSTING_COST)
-      if (!success) {
-        alert("Erro ao debitar saldo")
-        return
+      // Coleta os dados do formulário
+      const formData = new FormData(e.currentTarget)
+      const jobData = {
+        title: formData.get('title') as string,
+        description: formData.get('description') as string,
+        requirements: formData.get('requirements') as string || '',
+        salary_range: formData.get('budget') as string,
+        location: formData.get('location') as string || 'Remoto',
+        type: formData.get('type') as string || 'full_time',
+        category: formData.get('category') as string || 'outros',
+        company_id: USERS.COMPANY.ID,
+        status: 'open'
       }
 
-      // Redireciona para dashboard
-      router.push("/dashboard/company")
-    } catch (error) {
+      // Envia os dados para a API
+      const response = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(jobData),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || 'Erro ao criar vaga')
+      }
+
+      // Debita o custo da vaga apenas se a criação for bem-sucedida
+      const success = await updateBalance(-JOB_POSTING_COST)
+      if (!success) {
+        throw new Error("Erro ao debitar saldo")
+      }
+
+      // Redireciona para a página de vagas
+      router.push("/jobs")
+    } catch (error: any) {
       console.error("Erro ao publicar vaga:", error)
-      alert("Erro ao publicar vaga")
+      alert(error.message || "Erro ao publicar vaga")
     } finally {
       setLoading(false)
     }
@@ -97,19 +124,60 @@ export default function NewJobPage() {
           <Label htmlFor="description">Descrição</Label>
           <Textarea
             id="description"
-            placeholder="Descreva os requisitos e responsabilidades"
+            name="description"
+            placeholder="Descreva as responsabilidades e atividades da vaga"
             required
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="budget">Orçamento (R$)</Label>
+          <Label htmlFor="requirements">Requisitos</Label>
+          <Textarea
+            id="requirements"
+            name="requirements"
+            placeholder="Liste os requisitos necessários, separados por vírgula"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="location">Localização</Label>
+          <Input
+            id="location"
+            name="location"
+            placeholder="Ex: Remoto, São Paulo - SP"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="type">Tipo de Vaga</Label>
+          <select
+            id="type"
+            name="type"
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="full_time">Tempo Integral</option>
+            <option value="part_time">Meio Período</option>
+            <option value="contract">Contrato</option>
+            <option value="internship">Estágio</option>
+          </select>
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="category">Categoria</Label>
+          <Input
+            id="category"
+            name="category"
+            placeholder="Ex: Desenvolvimento, Design, Marketing"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="budget">Faixa Salarial (R$)</Label>
           <Input
             id="budget"
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="1000.00"
+            name="budget"
+            type="text"
+            placeholder="Ex: 3000.00 - 5000.00"
             required
           />
         </div>

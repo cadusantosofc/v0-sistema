@@ -17,6 +17,7 @@ export default function MyApplicationsPage() {
   const router = useRouter()
   const [statusFilter, setStatusFilter] = useState("all")
   const [success, setSuccess] = useState("")
+  const [loadingId, setLoadingId] = useState<string | null>(null)
 
   if (!user || user.role !== "worker") {
     return (
@@ -43,6 +44,40 @@ export default function MyApplicationsPage() {
         setSuccess("Candidatura cancelada com sucesso!")
         setTimeout(() => setSuccess(""), 3000)
       }
+    }
+  }
+
+  // PATCH para aceitar proposta
+  const handleAcceptProposal = async (applicationId: string) => {
+    setLoadingId(applicationId)
+    try {
+      await fetch('/api/applications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: applicationId, status: 'active' })
+      })
+      window.location.reload()
+    } catch (e) {
+      alert('Erro ao aceitar proposta')
+    } finally {
+      setLoadingId(null)
+    }
+  }
+
+  // PATCH para recusar proposta
+  const handleRejectProposal = async (applicationId: string) => {
+    setLoadingId(applicationId)
+    try {
+      await fetch('/api/applications', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: applicationId, status: 'rejected' })
+      })
+      window.location.reload()
+    } catch (e) {
+      alert('Erro ao recusar proposta')
+    } finally {
+      setLoadingId(null)
     }
   }
 
@@ -172,7 +207,7 @@ export default function MyApplicationsPage() {
                           {job.type === "remote" ? "Remoto" : job.type === "presencial" ? "Presencial" : "Freelance"}
                         </p>
                         <p>
-                          <strong>Salário:</strong> R$ {job.salary.toLocaleString("pt-BR")}
+                          <strong>Salário:</strong> R$ {job.salary ? job.salary.toLocaleString("pt-BR") : job.payment_amount ? job.payment_amount.toLocaleString("pt-BR") : job.salary_range || '0,00'}
                         </p>
                         <p>
                           <strong>Candidatura enviada em:</strong>{" "}
@@ -217,7 +252,47 @@ export default function MyApplicationsPage() {
                       )}
 
                       {application.status === "accepted_by_company" && (
-                        <Button onClick={() => router.push(`/jobs/${job.id}`)}>Aceitar Trabalho</Button>
+                        <>
+                          <Button 
+                            onClick={() => handleAcceptProposal(application.id)}
+                            variant="success"
+                            size="sm"
+                            disabled={loadingId === application.id}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" /> Aceitar Proposta
+                          </Button>
+                          <Button 
+                            onClick={() => handleRejectProposal(application.id)}
+                            variant="destructive"
+                            size="sm"
+                            disabled={loadingId === application.id}
+                          >
+                            <XCircle className="h-4 w-4 mr-2" /> Recusar Proposta
+                          </Button>
+                        </>
+                      )}
+
+                      {application.status === "pending_worker_confirmation" && (
+                        <>
+                          <Button 
+                            onClick={() => handleAcceptProposal(application.id)}
+                            variant="success"
+                            size="sm"
+                            disabled={loadingId === application.id}
+                            className="bg-green-600 hover:bg-green-700"
+                          >
+                            <CheckCircle className="h-4 w-4 mr-2" /> Aceitar Proposta
+                          </Button>
+                          <Button 
+                            onClick={() => handleRejectProposal(application.id)}
+                            variant="destructive"
+                            size="sm"
+                            disabled={loadingId === application.id}
+                          >
+                            <XCircle className="h-4 w-4 mr-2" /> Recusar Proposta
+                          </Button>
+                        </>
                       )}
                     </div>
 

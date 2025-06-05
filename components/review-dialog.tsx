@@ -2,101 +2,155 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
+import { 
+  Dialog, 
+  DialogContent, 
+  DialogDescription, 
+  DialogFooter, 
+  DialogHeader, 
+  DialogTitle, 
+  DialogTrigger 
+} from "@/components/ui/dialog"
 import { Star } from "lucide-react"
+import { useAuth } from "@/lib/auth-context"
 
 interface ReviewDialogProps {
   jobId: string
-  userId: string
-  userType: "company" | "worker"
-  onSubmit: (rating: number, comment: string) => Promise<void>
-  trigger?: React.ReactNode
+  reviewedId: string
+  reviewedName: string
+  jobTitle: string
+  onSuccess?: () => void
+  buttonText?: string
+  buttonVariant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link"
 }
 
 export function ReviewDialog({
   jobId,
-  userId,
-  userType,
-  onSubmit,
-  trigger
+  reviewedId,
+  reviewedName,
+  jobTitle,
+  onSuccess,
+  buttonText = "Avaliar",
+  buttonVariant = "default"
 }: ReviewDialogProps) {
+  const { user } = useAuth()
+  const [open, setOpen] = useState(false)
   const [rating, setRating] = useState(0)
   const [comment, setComment] = useState("")
-  const [hoveredStar, setHoveredStar] = useState(0)
-  const [loading, setLoading] = useState(false)
-  const [open, setOpen] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [error, setError] = useState("")
 
   const handleSubmit = async () => {
-    if (rating === 0) return
-    setLoading(true)
-    
+    if (!user) return
+    if (rating === 0) {
+      setError("Por favor, selecione uma avaliação")
+      return
+    }
+
+    setIsSubmitting(true)
+    setError("")
+
     try {
-      await onSubmit(rating, comment)
-      setOpen(false)
-      setRating(0)
-      setComment("")
-    } catch (error) {
-      console.error("Erro ao enviar avaliação:", error)
+      const response = await fetch("/api/reviews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          job_id: jobId,
+          reviewer_id: user.id,
+          reviewed_id: reviewedId,
+          rating,
+          comment
+        })
+      })
+
+      if (response.ok) {
+        setOpen(false)
+        setRating(0)
+        setComment("")
+        if (onSuccess) onSuccess()
+      } else {
+        const data = await response.json()
+        setError(data.error || "Erro ao enviar avaliação")
+      }
+    } catch (err) {
+      setError("Erro ao enviar avaliação. Tente novamente.")
     } finally {
-      setLoading(false)
+      setIsSubmitting(false)
     }
   }
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        {trigger || <Button variant="outline">Avaliar</Button>}
+        <Button variant={buttonVariant}>{buttonText}</Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
-          <DialogTitle>Avaliar {userType === "company" ? "Profissional" : "Empresa"}</DialogTitle>
+          <DialogTitle>Avaliar {reviewedName}</DialogTitle>
           <DialogDescription>
-            Como foi sua experiência? Sua avaliação ajuda outros usuários.
+            Compartilhe sua experiência trabalhando em "{jobTitle}"
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 py-4">
-          <div className="flex justify-center gap-1">
-            {[1, 2, 3, 4, 5].map((star) => (
-              <button
-                key={star}
-                type="button"
-                onClick={() => setRating(star)}
-                onMouseEnter={() => setHoveredStar(star)}
-                onMouseLeave={() => setHoveredStar(0)}
-                className="p-1 transition-colors"
-              >
-                <Star
-                  className={`h-8 w-8 ${
-                    star <= (hoveredStar || rating)
-                      ? "fill-yellow-400 text-yellow-400"
-                      : "text-gray-300"
-                  }`}
-                />
-              </button>
-            ))}
+        
+        <div className="py-4 space-y-4">
+          <div className="flex flex-col items-center space-y-2">
+            <span className="text-sm text-gray-600">Sua avaliação</span>
+            <div className="flex items-center space-x-1">
+              {[1, 2, 3, 4, 5].map((value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => setRating(value)}
+                  className="focus:outline-none"
+                >
+                  <Star
+                    className={`h-8 w-8 ${
+                      value <= rating
+                        ? "fill-yellow-400 text-yellow-400"
+                        : "text-gray-300"
+                    }`}
+                  />
+                </button>
+              ))}
+            </div>
+            <span className="text-sm font-medium">
+              {rating === 1 && "Ruim"}
+              {rating === 2 && "Regular"}
+              {rating === 3 && "Bom"}
+              {rating === 4 && "Muito bom"}
+              {rating === 5 && "Excelente"}
+            </span>
           </div>
-          <Textarea
-            placeholder="Deixe um comentário sobre sua experiência..."
-            value={comment}
-            onChange={e => setComment(e.target.value)}
-          />
+
+          <div className="space-y-2">
+            <label className="text-sm font-medium">Comentário (opcional)</label>
+            <Textarea
+              placeholder="Compartilhe detalhes da sua experiência..."
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              rows={4}
+            />
+          </div>
+
+          {error && (
+            <div className="text-sm text-red-500">{error}</div>
+          )}
         </div>
+
         <DialogFooter>
           <Button
-            type="submit"
-            onClick={handleSubmit}
-            disabled={rating === 0 || loading}
+            variant="outline"
+            onClick={() => setOpen(false)}
+            disabled={isSubmitting}
           >
-            {loading ? "Enviando..." : "Enviar Avaliação"}
+            Cancelar
+          </Button>
+          <Button 
+            onClick={handleSubmit} 
+            disabled={isSubmitting || rating === 0}
+          >
+            {isSubmitting ? "Enviando..." : "Enviar avaliação"}
           </Button>
         </DialogFooter>
       </DialogContent>

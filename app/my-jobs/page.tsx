@@ -70,7 +70,7 @@ export default function MyJobsPage() {
         userId: job.assignedWorkerId,
         type: "payment",
         title: "Trabalho Concluído!",
-        message: `O pagamento de R$ ${job.salary.toFixed(2)} foi liberado para sua carteira.`,
+        message: `O pagamento de R$ ${job.salary ? job.salary.toFixed(2) : job.payment_amount ? job.payment_amount.toFixed(2) : '0.00'} foi liberado para sua carteira.`,
         read: false,
         createdAt: new Date().toISOString(),
         data: { jobId },
@@ -192,9 +192,11 @@ export default function MyJobsPage() {
                         <p>
                           <strong>Categoria:</strong> {job.category}
                         </p>
-                        <p>
-                          <strong>Salário:</strong> R$ {job.salary.toLocaleString("pt-BR")}
-                        </p>
+                        <div className="mt-4">
+                          <p className="mb-2">
+                            <strong>Salário:</strong> R$ {job.salary ? job.salary.toLocaleString("pt-BR") : job.payment_amount ? job.payment_amount.toLocaleString("pt-BR") : '0,00'}
+                          </p>
+                        </div>
                         <p>
                           <strong>Publicada em:</strong> {new Date(job.createdAt).toLocaleDateString("pt-BR")}
                         </p>

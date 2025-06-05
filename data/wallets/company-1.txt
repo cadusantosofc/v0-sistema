@@ -1,4 +1,0 @@
-{
-  "id": "company-1",
-  "balance": 1750
-}

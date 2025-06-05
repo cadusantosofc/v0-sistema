@@ -32,7 +32,7 @@ import { useAuth } from "@/lib/auth-context"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 
 export function Header() {
-  const { user, logout } = useAuth()
+  const { user, logout, isLoading } = useAuth()
   const pathname = usePathname()
   const router = useRouter()
 
@@ -157,8 +157,8 @@ export function Header() {
                   <DropdownMenuTrigger asChild>
                     <Button variant="ghost" className="relative h-8 w-8 rounded-full">
                       <Avatar className="h-8 w-8">
-                        <AvatarImage src={user.avatar} alt={user.name} />
-                        <AvatarFallback>{user.name[0]}</AvatarFallback>
+                        <AvatarImage src={user.avatar || "/placeholder.svg"} alt={user.name} />
+                        <AvatarFallback>{user.name ? user.name.charAt(0).toUpperCase() : 'U'}</AvatarFallback>
                       </Avatar>
                     </Button>
                   </DropdownMenuTrigger>
@@ -194,12 +194,16 @@ export function Header() {
               </>
             ) : (
               <div className="flex gap-2">
-                <Link href="/login">
-                  <Button variant="ghost">Entrar</Button>
-                </Link>
-                <Link href="/register">
-                  <Button>Cadastrar</Button>
-                </Link>
+                {!isLoading && (
+                  <>
+                    <Link href="/login">
+                      <Button variant="ghost">Entrar</Button>
+                    </Link>
+                    <Link href="/register">
+                      <Button>Cadastrar</Button>
+                    </Link>
+                  </>
+                )}
               </div>
             )}
           </div>

@@ -1,6 +1,5 @@
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { AuthProvider } from "@/hooks/use-auth.tsx"
 import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 import { Providers } from "./providers"
@@ -66,12 +65,10 @@ export default function RootLayout({
         <meta name="theme-color" content="#ffffff" />
       </head>
       <body className={inter.className} suppressHydrationWarning>
-        <AuthProvider>
-          <Providers>
-            {children}
-            <Toaster />
-          </Providers>
-        </AuthProvider>
+        <Providers>
+          {children}
+          <Toaster />
+        </Providers>
       </body>
     </html>
   )

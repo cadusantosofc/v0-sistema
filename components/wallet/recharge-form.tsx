@@ -51,9 +51,11 @@ export function RechargeForm({ userId, userName }: RechargeFormProps) {
 
       setLoading(true)
 
-      // Simula upload do comprovante
+      // Simula upload do comprovante (em um sistema real, você faria upload para um serviço como S3)
+      // e obteria a URL do arquivo
       const receiptUrl = `/uploads/${receipt.name}`
 
+      // Criar solicitação de recarga
       const res = await fetch("/api/wallet/requests", {
         method: "POST",
         headers: {
@@ -68,15 +70,14 @@ export function RechargeForm({ userId, userName }: RechargeFormProps) {
         }),
       })
 
-      const data = await res.json()
-
       if (!res.ok) {
+        const data = await res.json()
         throw new Error(data.error || "Erro ao criar solicitação")
       }
 
       toast({
         title: "Sucesso",
-        description: "Solicitação de recarga criada com sucesso",
+        description: "Solicitação de recarga enviada com sucesso! Aguarde a aprovação do administrador.",
       })
 
       setAmount("")

@@ -21,41 +21,41 @@ const noHeaderRoutes = ["/", "/login", "/register"]
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const pathname = usePathname()
-  const showHeader = !noHeaderRoutes.some((route) => pathname === route)
+  const showHeader = pathname !== "/login" && pathname !== "/register" && pathname !== "/"
 
   return (
-    <NextThemesProvider
-      attribute="class"
-      defaultTheme="system"
-      enableSystem
-      disableTransitionOnChange
-      themes={["light", "dark"]}
-    >
-      <AuthProvider>
+    <AuthProvider>
+      <NotificationsProvider>
         <TransactionsProvider>
           <ActivityLogProvider>
             <TicketsProvider>
               <JobsProvider>
                 <ChatProvider>
-                  <NotificationsProvider>
-                    <ReviewsProvider>
-                      <RealtimeProvider>
-                        <ApplicationsProvider>
+                  <ReviewsProvider>
+                    <RealtimeProvider>
+                      <ApplicationsProvider>
+                        <NextThemesProvider
+                          attribute="class"
+                          defaultTheme="system"
+                          enableSystem
+                          disableTransitionOnChange
+                          themes={["light", "dark"]}
+                        >
                           <div className="min-h-screen bg-background">
                             {showHeader && <Header />}
                             <main>{children}</main>
                             <Toaster />
                           </div>
-                        </ApplicationsProvider>
-                      </RealtimeProvider>
-                    </ReviewsProvider>
-                  </NotificationsProvider>
+                        </NextThemesProvider>
+                      </ApplicationsProvider>
+                    </RealtimeProvider>
+                  </ReviewsProvider>
                 </ChatProvider>
               </JobsProvider>
             </TicketsProvider>
           </ActivityLogProvider>
         </TransactionsProvider>
-      </AuthProvider>
-    </NextThemesProvider>
+      </NotificationsProvider>
+    </AuthProvider>
   )
 }

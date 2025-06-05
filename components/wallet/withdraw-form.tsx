@@ -74,15 +74,14 @@ export function WithdrawForm({ userId, userName }: WithdrawFormProps) {
         }),
       })
 
-      const data = await res.json()
-
       if (!res.ok) {
+        const data = await res.json()
         throw new Error(data.error || "Erro ao criar solicitação")
       }
 
       toast({
         title: "Sucesso",
-        description: "Solicitação de saque criada com sucesso",
+        description: "Solicitação de saque enviada com sucesso! Aguarde a aprovação do administrador.",
       })
 
       setAmount("")

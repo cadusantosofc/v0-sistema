@@ -40,7 +40,7 @@ interface TransactionsContextType {
     requestId: string,
     approved: boolean,
     processedBy: string,
-    updateWallet: (userId: string, amount: number) => void,
+    updateWallet: (newBalance: number) => void,
   ) => void
   getPendingRequests: () => BalanceRequest[]
   getUserRequests: (userId: string) => BalanceRequest[]
@@ -48,9 +48,10 @@ interface TransactionsContextType {
   releaseJobPayment: (
     jobId: string,
     workerId: string,
-    updateWallet: (userId: string, amount: number) => void,
-  ) => boolean
-  cancelJobPayment: (jobId: string, updateWallet: (userId: string, amount: number) => void) => boolean
+    updateWallet: (newBalance: number) => void,
+    userId: string
+  ) => Promise<boolean>
+  cancelJobPayment: (jobId: string, updateWallet: (newBalance: number) => void) => boolean
   calculateBalance: (userId: string, baseWallet: number) => number
 }
 
@@ -122,7 +123,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     requestId: string,
     approved: boolean,
     processedBy: string,
-    updateWallet: (userId: string, amount: number) => void,
+    updateWallet: (newBalance: number) => void,
   ) => {
     const request = balanceRequests.find((r) => r.id === requestId)
     if (!request) return
@@ -152,7 +153,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         })
 
         // Atualiza APENAS a carteira do usuário - SEM DUPLICAR
-        updateWallet(request.userId, request.amount)
+        updateWallet(request.amount)
       } else if (request.type === "withdrawal") {
         // Apenas registra a transação para histórico
         addTransaction({
@@ -165,7 +166,7 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
         })
 
         // Atualiza APENAS a carteira do usuário - SEM DUPLICAR
-        updateWallet(request.userId, -request.amount)
+        updateWallet(-request.amount)
       }
     }
   }
@@ -194,58 +195,104 @@ export function TransactionsProvider({ children }: { children: React.ReactNode }
     return true
   }
 
-  const releaseJobPayment = (
+  // Função para buscar transações do backend
+  const fetchTransactionsFromBackend = async (userId: string) => {
+    try {
+      const res = await fetch(`/api/wallet/transactions?userId=${userId}`);
+      if (!res.ok) return;
+      const data = await res.json();
+      setTransactions(data);
+    } catch (error) {
+      console.error('Erro ao buscar transações do backend:', error);
+    }
+  };
+
+  // Novo releaseJobPayment sincronizado
+  const releaseJobPayment = async (
     jobId: string,
     workerId: string,
-    updateWallet: (userId: string, amount: number) => void,
-  ): boolean => {
+    updateWallet: (newBalance: number) => void,
+    userId: string
+  ): Promise<boolean> => {
+    // Buscar transações do backend antes de liberar pagamento
+    await fetchTransactionsFromBackend(userId);
     // Find the held transaction
-    const heldTransaction = transactions.find((t) => t.jobId === jobId && t.type === "hold" && t.status === "held")
-
-    if (!heldTransaction) return false
-
+    const heldTransaction = transactions.find((t) => t.jobId === jobId && t.type === "hold" && t.status === "held");
+    if (!heldTransaction) {
+      console.error(`Nenhuma transação retida encontrada para a vaga ${jobId}`);
+      return false;
+    }
+    // Verifica se já existe um pagamento para esta vaga
+    const existingPayment = transactions.find(
+      (t) => t.jobId === jobId && t.type === "credit" && t.status === "completed" && 
+      t.userId === workerId && t.description.includes("Pagamento recebido")
+    );
+    if (existingPayment) {
+      console.warn(`Pagamento já realizado para o trabalhador ${workerId} pela vaga ${jobId}`);
+      // Opcional: atualizar status da vaga/candidatura para concluído no frontend
+      // Aqui você pode disparar uma função para atualizar o status localmente
+      return false;
+    }
     // Update held transaction to completed
-    updateTransaction(heldTransaction.id, { status: "completed" })
-
+    updateTransaction(heldTransaction.id, { status: "completed" });
+    const paymentAmount = Math.abs(heldTransaction.amount);
+    const companyId = heldTransaction.userId;
     // Create credit transaction for worker
     addTransaction({
       userId: workerId,
       type: "credit",
-      amount: Math.abs(heldTransaction.amount),
-      description: `Pagamento recebido - ${heldTransaction.description}`,
+      amount: paymentAmount,
+      description: `Pagamento recebido - Vaga concluída (ID: ${jobId})`,
       status: "completed",
       jobId,
-      relatedUserId: heldTransaction.userId,
-    })
-
+      relatedUserId: companyId,
+    });
     // Update worker wallet
-    updateWallet(workerId, Math.abs(heldTransaction.amount))
+    updateWallet(paymentAmount);
+    console.log(`Pagamento de R$ ${paymentAmount} transferido da empresa ${companyId} para o trabalhador ${workerId} pela vaga ${jobId}`);
+    return true;
+  };
 
-    return true
-  }
-
-  const cancelJobPayment = (jobId: string, updateWallet: (userId: string, amount: number) => void): boolean => {
+  const cancelJobPayment = (jobId: string, updateWallet: (newBalance: number) => void): boolean => {
     // Find the held transaction
     const heldTransaction = transactions.find((t) => t.jobId === jobId && t.type === "hold" && t.status === "held")
 
-    if (!heldTransaction) return false
+    if (!heldTransaction) {
+      console.error(`Nenhuma transação retida encontrada para a vaga ${jobId}`);
+      return false;
+    }
+
+    // Verifica se já existe um reembolso para esta vaga
+    const existingRefund = transactions.find(
+      (t) => t.jobId === jobId && t.type === "credit" && t.status === "completed" && 
+      t.description.includes("Reembolso")
+    );
+    
+    if (existingRefund) {
+      console.error(`Reembolso já realizado para a vaga ${jobId}`);
+      return false;
+    }
 
     // Update held transaction to failed
     updateTransaction(heldTransaction.id, { status: "failed" })
 
     // Return money to company
+    const companyId = heldTransaction.userId;
+    const refundAmount = Math.abs(heldTransaction.amount);
+    
     addTransaction({
-      userId: heldTransaction.userId,
+      userId: companyId,
       type: "credit",
-      amount: Math.abs(heldTransaction.amount),
-      description: `Reembolso - Vaga cancelada`,
+      amount: refundAmount,
+      description: `Reembolso - Vaga cancelada (ID: ${jobId})`,
       status: "completed",
       jobId,
     })
 
     // Update company wallet
-    updateWallet(heldTransaction.userId, Math.abs(heldTransaction.amount))
+    updateWallet(-refundAmount)
 
+    console.log(`Reembolso de R$ ${refundAmount} realizado para a empresa ${companyId} pela vaga ${jobId}`);
     return true
   }
 

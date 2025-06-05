@@ -24,6 +24,8 @@ interface JobCardProps {
     requirements: string[]
     createdAt: string
     companyId: string
+    payment_amount?: number
+    salary_range?: string
   }
   showActions?: boolean
 }
@@ -72,10 +74,24 @@ export function JobCard({ job, showActions = true }: JobCardProps) {
           </div>
           <div className="flex items-center">
             <DollarSign className="mr-2 h-4 w-4 text-muted-foreground" />
-            {job.salary.toLocaleString("pt-BR", {
-              style: "currency",
-              currency: "BRL",
-            })}
+            <div className="text-right">
+              <p className="font-medium text-green-600">
+                {job.salary ? 
+                  `R$ ${job.salary.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}` : 
+                  job.payment_amount ? 
+                  `R$ ${job.payment_amount.toLocaleString("pt-BR", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}` : 
+                  job.salary_range ? 
+                  `R$ ${job.salary_range}` : 
+                  'A combinar'
+                }
+              </p>
+            </div>
           </div>
           <div className="flex items-center">
             <Calendar className="mr-2 h-4 w-4 text-muted-foreground" />

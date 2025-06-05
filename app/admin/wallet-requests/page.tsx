@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from "react"
 import { useToast } from "@/components/ui/use-toast"
+import { useAuth } from "@/lib/auth-context"
+import { useRouter } from "next/navigation"
 import {
   Table,
   TableBody,
@@ -20,15 +22,18 @@ import { useWallet } from "@/hooks/use-wallet"
 
 type Request = {
   id: string
-  userId: string
-  userName: string
-  type: "withdrawal" | "recharge"
+  user_id: string
+  user_name: string
+  type: "deposit" | "withdrawal"
   amount: number
   status: "pending" | "approved" | "rejected"
-  pixKey?: string
-  receiptUrl?: string
-  createdAt: string
-  processedAt?: string
+  pix_key?: string
+  receipt_url?: string
+  created_at: Date
+  updated_at: Date
+  processed_at?: Date
+  processed_by?: string
+  current_balance?: number
 }
 
 export default function WalletRequestsPage() {
@@ -36,6 +41,20 @@ export default function WalletRequestsPage() {
   const [loading, setLoading] = useState(true)
   const [viewReceipt, setViewReceipt] = useState<string | null>(null)
   const { toast } = useToast()
+  const { user } = useAuth()
+  const router = useRouter()
+
+  // Redirecionar se não estiver autenticado ou não for admin
+  useEffect(() => {
+    if (!user) {
+      router.push("/login")
+      return
+    }
+    if (user.role !== "admin") {
+      router.push("/")
+      return
+    }
+  }, [user, router])
 
   // Carrega solicitações
   useEffect(() => {
@@ -45,7 +64,7 @@ export default function WalletRequestsPage() {
   // Função para carregar solicitações
   const loadRequests = async () => {
     try {
-      const res = await fetch("/api/wallet/requests")
+      const res = await fetch("/api/admin/wallet-requests")
       if (!res.ok) throw new Error("Erro ao carregar solicitações")
       const data = await res.json()
       setRequests(data)
@@ -64,13 +83,14 @@ export default function WalletRequestsPage() {
   // Função para aprovar/rejeitar
   const handleApprove = async (requestId: string, approve: boolean) => {
     try {
-      const res = await fetch(`/api/wallet/requests/${requestId}`, {
-        method: "PATCH",
+      const res = await fetch(`/api/admin/wallet-requests`, {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          status: approve ? "approved" : "rejected",
+          id: requestId,
+          action: approve ? "approve" : "reject",
         }),
       })
 
@@ -109,31 +129,51 @@ export default function WalletRequestsPage() {
 
   return (
     <div className="container py-6">
-      <div className="rounded-md border">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Data</TableHead>
-              <TableHead>Usuário</TableHead>
-              <TableHead>Tipo</TableHead>
-              <TableHead>Valor</TableHead>
-              <TableHead>Saldo Atual</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Ações</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {requests.map((request) => (
-              <RequestRow
-                key={request.id}
-                request={request}
-                onApprove={handleApprove}
-                onViewReceipt={setViewReceipt}
-              />
-            ))}
-          </TableBody>
-        </Table>
+      <div className="flex flex-col gap-4 mb-6">
+        <h1 className="text-2xl font-bold">Solicitações de Carteira</h1>
+        <p className="text-muted-foreground">
+          Gerencie solicitações de saque e recarga dos usuários
+        </p>
       </div>
+
+      {loading ? (
+        <div className="flex justify-center items-center min-h-[200px]">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      ) : requests.length === 0 ? (
+        <div className="rounded-lg border p-8 text-center">
+          <h3 className="text-lg font-medium mb-2">Nenhuma solicitação pendente</h3>
+          <p className="text-muted-foreground">
+            Não há solicitações de saque ou recarga pendentes no momento.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-md border">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data</TableHead>
+                <TableHead>Usuário</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Valor</TableHead>
+                <TableHead>Saldo Atual</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {requests.map((request) => (
+                <RequestRow
+                  key={request.id}
+                  request={request}
+                  onApprove={handleApprove}
+                  onViewReceipt={setViewReceipt}
+                />
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      )}
 
       <Dialog open={!!viewReceipt} onOpenChange={() => setViewReceipt(null)}>
         <DialogContent>
@@ -167,24 +207,35 @@ function RequestRow({
   onApprove: (id: string, approve: boolean) => Promise<void>
   onViewReceipt: (url: string) => void
 }) {
-  const { balance, loading } = useWallet(request.userId)
   const isPending = request.status === "pending"
   const isWithdrawal = request.type === "withdrawal"
-  const hasBalance = balance >= request.amount
+  const hasBalance = (request.current_balance || 0) >= request.amount
 
   return (
     <TableRow>
       <TableCell>
-        {new Date(request.createdAt).toLocaleDateString("pt-BR")}
+        {new Date(request.created_at).toLocaleDateString("pt-BR")}
       </TableCell>
-      <TableCell>{request.userName}</TableCell>
+      <TableCell>
+        <div className="flex flex-col">
+          <span className="font-medium">{request.user_name}</span>
+          <span className="text-xs text-muted-foreground">{request.user_id}</span>
+        </div>
+      </TableCell>
       <TableCell>
         <Badge variant={isWithdrawal ? "destructive" : "default"}>
-          {isWithdrawal ? "Saque" : "Recarga"}
+          {isWithdrawal ? "Saque" : "Depósito"}
         </Badge>
+        {isWithdrawal && request.pix_key && (
+          <div className="mt-1 text-xs text-muted-foreground">
+            PIX: {request.pix_key}
+          </div>
+        )}
       </TableCell>
       <TableCell>
-        R$ {request.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        <span className="font-medium">
+          R$ {request.amount.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+        </span>
       </TableCell>
       <TableCell>
         <span
@@ -193,11 +244,7 @@ function RequestRow({
             isWithdrawal && isPending && !hasBalance && "text-destructive"
           )}
         >
-          {loading ? (
-            "Carregando..."
-          ) : (
-            `R$ ${balance.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-          )}
+          R$ {(request.current_balance || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
         </span>
       </TableCell>
       <TableCell>
@@ -226,6 +273,7 @@ function RequestRow({
                 size="sm"
                 onClick={() => onApprove(request.id, true)}
                 disabled={isWithdrawal && !hasBalance}
+                title={isWithdrawal && !hasBalance ? "Saldo insuficiente" : undefined}
               >
                 Aprovar
               </Button>
@@ -238,11 +286,11 @@ function RequestRow({
               </Button>
             </>
           )}
-          {request.receiptUrl && (
+          {request.receipt_url && (
             <Button
               variant="outline"
               size="sm"
-              onClick={() => onViewReceipt(request.receiptUrl!)}
+              onClick={() => onViewReceipt(request.receipt_url!)}
             >
               <Eye className="h-4 w-4" />
             </Button>

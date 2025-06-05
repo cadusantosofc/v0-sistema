@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -43,6 +41,13 @@ export default function LoginPage() {
       setIsLoading(false)
     }
   }
+
+  const DemoAccount = ({ type, email }: { type: string; email: string }) => (
+    <p>
+      <span className="font-medium">{type}:</span>
+      {` ${email} / admin123`}
+    </p>
+  )
 
   return (
     <div className="min-h-screen bg-background flex items-center justify-center p-4">
@@ -150,16 +155,12 @@ export default function LoginPage() {
 
             {/* Demo credentials */}
             <div className="mt-6 p-4 bg-muted rounded-lg">
-              <h4 className="font-medium text-sm mb-2">Contas de Teste:</h4>
-              <div className="text-xs space-y-1 text-muted-foreground">
-                <div className="break-all">
-                  <strong>Admin:</strong> admin@admin.com / 123456
-                </div>
-                <div className="break-all">
-                  <strong>Empresa:</strong> contato@techcorp.com / tech123
-                </div>
-                <div className="break-all">
-                  <strong>Profissional:</strong> joao.silva@email.com / joao123
+              <div className="text-sm text-gray-500">
+                <p className="font-medium mb-2">Contas de Teste:</p>
+                <div className="space-y-1">
+                  <DemoAccount type="Admin" email="admin@admin.com" />
+                  <DemoAccount type="Empresa" email="tech@company.com" />
+                  <DemoAccount type="Profissional" email="joao@worker.com" />
                 </div>
               </div>
             </div>

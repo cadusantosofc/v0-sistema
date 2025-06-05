@@ -1,39 +1,42 @@
-import { NextResponse } from "next/server"
-import { getWallet } from "@/lib/wallet"
-
-// Mock de usuários - substituir por banco real
-const mockUsers = [
-  { id: "worker-1", name: "João Silva", role: "worker", avatar: "" },
-  { id: "worker-2", name: "Maria Santos", role: "worker", avatar: "" },
-  { id: "company-1", name: "Tech Corp", role: "company", avatar: "" },
-  { id: "company-2", name: "Inova Ltda", role: "company", avatar: "" }
-]
+import { NextResponse } from "next/server";
+import { listUsers } from "../../../src/models/user";
+import { getWalletByUserId } from "../../../src/models/wallet";
 
 export async function GET(request: Request) {
   try {
-    const { searchParams } = new URL(request.url)
-    const role = searchParams.get("role")
+    const { searchParams } = new URL(request.url);
+    const role = searchParams.get("role");
 
-    // Filtra usuários por role
-    const filteredUsers = role 
-      ? mockUsers.filter(user => user.role === role)
-      : mockUsers
+    // Busca usuários do banco
+    const validRole = role === 'admin' || role === 'worker' || role === 'company' ? role : undefined;
+    const users = await listUsers(validRole);
 
-    // Adiciona saldo atual e avatar padrão para cada usuário
-    const usersWithWallet = filteredUsers.map(user => ({
-      ...user,
-      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`,
-      wallet: {
-        balance: getWallet(user.id)
-      }
-    }))
+    // Adiciona saldo e avatar padrão para cada usuário
+    const usersWithWallet = await Promise.all(
+      users.map(async (user) => {
+        // Busca carteira do usuário
+        const wallet = await getWalletByUserId(user.id);
 
-    return NextResponse.json(usersWithWallet)
+        // Remove senha do objeto
+        const { password, ...userWithoutPassword } = user;
+
+        return {
+          ...userWithoutPassword,
+          avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`,
+          wallet: {
+            balance: wallet?.balance || 0,
+            status: wallet?.status || 'inactive'
+          }
+        };
+      })
+    );
+
+    return NextResponse.json(usersWithWallet);
   } catch (error) {
-    console.error("Erro ao buscar usuários:", error)
+    console.error("Erro ao buscar usuários:", error);
     return NextResponse.json(
       { error: "Erro interno do servidor" },
       { status: 500 }
-    )
+    );
   }
 }

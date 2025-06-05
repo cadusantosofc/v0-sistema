@@ -26,10 +26,24 @@ export default function ReviewsPage() {
   useEffect(() => {
     const fetchReviews = async () => {
       try {
-        // Aqui você deve integrar com sua API
-        const response = await fetch(`/api/users/${user?.id}/reviews`)
+        // Corrigir a URL da API para usar o endpoint correto
+        const response = await fetch(`/api/reviews?userId=${user?.id}`)
+        
+        if (!response.ok) {
+          throw new Error(`API responded with status: ${response.status}`);
+        }
+        
         const data = await response.json()
-        setReviews(data)
+        // Processar os dados da resposta corretamente
+        setReviews(data.reviews?.map(review => ({
+          id: review.id,
+          companyId: review.reviewer_id,
+          companyName: review.reviewer_name || "Empresa",
+          companyAvatar: review.reviewer_avatar || "/placeholder.svg",
+          rating: review.rating,
+          comment: review.comment,
+          createdAt: review.created_at
+        })) || [])
       } catch (error) {
         console.error("Erro ao carregar avaliações:", error)
       } finally {
@@ -39,6 +53,8 @@ export default function ReviewsPage() {
 
     if (user) {
       fetchReviews()
+    } else {
+      setLoading(false)
     }
   }, [user])
 

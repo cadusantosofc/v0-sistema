@@ -1,48 +1,22 @@
 import { NextResponse } from "next/server"
-import fs from "fs/promises"
-import path from "path"
-
-interface User {
-  id: string
-  name: string
-  email: string
-  role: string
-  avatar: string
-  phone: string
-  bio?: string
-  category?: string
-  website?: string
-  location?: string
-  status?: "active" | "banned"
-  rating?: number
-  createdAt?: string
-}
-
-// Função para carregar os usuários do arquivo
-async function loadUsers(): Promise<User[]> {
-  try {
-    const usersPath = path.join(process.cwd(), "data", "users.txt")
-    const data = await fs.readFile(usersPath, "utf-8")
-    return JSON.parse(data)
-  } catch (error) {
-    console.error("Erro ao carregar usuários:", error)
-    return []
-  }
-}
+import { listUsers } from "../../../../src/models/user"
 
 export async function GET() {
   try {
-    const users = await loadUsers()
+    const users = await listUsers()
     
-    // Filter out companies and add default fields
+    // Add default fields and filter out companies
     const formattedUsers = users
-      .filter(user => user.role !== "company") // Remove companies
+      .filter(user => user.role !== 'company')
       .map(user => ({
-        ...user,
-        status: user.status || "active",
-        createdAt: user.createdAt || new Date().toISOString(),
-        avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`
-      }))
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar || `https://ui-avatars.com/api/?name=${encodeURIComponent(user.name)}&background=random`,
+      status: "active",
+      createdAt: user.created_at
+    }))
 
     return NextResponse.json(formattedUsers)
   } catch (error) {

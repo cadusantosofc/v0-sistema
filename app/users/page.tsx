@@ -150,17 +150,15 @@ export default function UsersPage() {
 
       {loading ? (
         <Card>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              {[...Array(5)].map((_, i) => (
-                <div key={i} className="flex items-center space-x-4">
-                  <div className="h-10 w-10 rounded-full bg-muted" />
-                  <div className="space-y-2">
-                    <div className="h-4 w-[200px] bg-muted rounded" />
-                    <div className="h-3 w-[150px] bg-muted rounded" />
-                  </div>
-                </div>
-              ))}
+          <CardHeader>
+            <CardTitle>Carregando...</CardTitle>
+            <CardDescription>
+              Aguarde enquanto carregamos os usuários
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-center p-6">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
             </div>
           </CardContent>
         </Card>

@@ -50,8 +50,15 @@ export default function AdminPage() {
     const amount = Number.parseFloat(walletAmount)
     if (isNaN(amount) || amount <= 0) return
 
-    const finalAmount = operation === "add" ? amount : -amount
-    updateWallet(selectedUser, finalAmount)
+    // Encontrar o usuário selecionado
+    const user = allUsers.find(u => u.id === selectedUser)
+    if (!user) return
+    
+    // Calcular o novo saldo
+    const finalAmount = operation === "add" ? user.wallet + amount : user.wallet - amount
+    
+    // Atualizar o saldo
+    updateWallet(finalAmount)
 
     setSuccess(`Saldo ${operation === "add" ? "adicionado" : "removido"} com sucesso!`)
     setWalletAmount("")

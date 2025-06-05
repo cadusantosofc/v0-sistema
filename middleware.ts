@@ -39,7 +39,16 @@ export function middleware(request: NextRequest) {
     }
   }
 
-  return NextResponse.next()
+  // Clonar a resposta para adicionar headers
+  const response = NextResponse.next();
+
+  // Adicionar headers CORS para permitir requisições de diferentes origens
+  response.headers.set('Access-Control-Allow-Origin', '*');
+  response.headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  response.headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  
+  // Retornar a resposta modificada
+  return response;
 }
 
 export const config = {
@@ -52,5 +61,6 @@ export const config = {
     "/settings/:path*",
     "/login",
     "/register",
+    "/api/:path*",
   ],
 }

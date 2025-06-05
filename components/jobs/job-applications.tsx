@@ -35,10 +35,13 @@ export function JobApplications({ jobId }: JobApplicationsProps) {
 
   const applications = getJobApplications(jobId)
 
-  const handleUpdateStatus = async (applicationId: string, status: "accepted" | "rejected") => {
+  const handleUpdateStatus = async (applicationId: string, status: 'accepted' | 'rejected') => {
     setLoading(applicationId)
     try {
-      updateApplicationStatus(applicationId, status)
+      // Se aceitar, enviar 'pending_worker_confirmation' em vez de 'accepted'
+      const newStatus = status === 'accepted' ? 'pending_worker_confirmation' : status
+      await updateApplicationStatus(applicationId, newStatus as any)
+      window.location.reload()
     } finally {
       setLoading("")
     }
